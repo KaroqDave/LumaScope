@@ -1,0 +1,103 @@
+[
+  {
+    "_index": "packets-2024-01-01",
+    "_type": "doc",
+    "_source": {
+      "layers": {
+        "frame": { "frame.number": "1", "frame.len": "37" },
+        "usb": {
+          "usb.src": "host",
+          "usb.dst": "1.5.3",
+          "usb.transfer_type": "0x01",
+          "usb.device_address": "5",
+          "usb.endpoint_address": "0x03",
+          "usb.endpoint_address_tree": {
+            "usb.endpoint_address.direction": "0",
+            "usb.endpoint_address.number": "3"
+          },
+          "usb.idVendor": "0x1532",
+          "usb.idProduct": "0x0226"
+        },
+        "usbhid.data": "00:01:02:03:04:05"
+      }
+    }
+  },
+  {
+    "_index": "packets-2024-01-01",
+    "_type": "doc",
+    "_source": {
+      "layers": {
+        "frame": { "frame.number": "2", "frame.len": "30" },
+        "usb": {
+          "usb.src": "host",
+          "usb.dst": "1.5.2",
+          "usb.transfer_type": "0x03",
+          "usb.endpoint_address": "0x02",
+          "usb.endpoint_address_tree": {
+            "usb.endpoint_address.direction": "0",
+            "usb.endpoint_address.number": "2"
+          },
+          "usb.capdata": "aa:bb:cc"
+        }
+      }
+    }
+  },
+  {
+    "_index": "packets-2024-01-01",
+    "_type": "doc",
+    "_source": {
+      "layers": {
+        "frame": { "frame.number": "3", "frame.len": "31" },
+        "usb": {
+          "usb.src": "host",
+          "usb.dst": "1.5.0",
+          "usb.transfer_type": "0x02",
+          "usb.endpoint_address": "0x00",
+          "usb.endpoint_address_tree": {
+            "usb.endpoint_address.direction": "0",
+            "usb.endpoint_address.number": "0"
+          }
+        },
+        "usb.data_fragment": "de:ad:be:ef"
+      }
+    }
+  },
+  {
+    "_index": "packets-2024-01-01",
+    "_type": "doc",
+    "_source": {
+      "layers": {
+        "frame": { "frame.number": "4", "frame.len": "29" },
+        "usb": {
+          "usb.src": "1.5.4",
+          "usb.dst": "host",
+          "usb.transfer_type": "0x01",
+          "usb.endpoint_address": "0x84",
+          "usb.endpoint_address_tree": {
+            "usb.endpoint_address.direction": "1",
+            "usb.endpoint_address.number": "4"
+          }
+        },
+        "usbhid": {
+          "usbhid.data": "ff:ee"
+        }
+      }
+    }
+  },
+  {
+    "_index": "packets-2024-01-01",
+    "_type": "doc",
+    "_source": {
+      "layers": {
+        "frame": { "frame.number": "5", "frame.len": "27" },
+        "usb": {
+          "usb.src": "host",
+          "usb.dst": "1.5.0",
+          "usb.transfer_type": "0x02",
+          "usb.bmRequestType": "0x80",
+          "usb.endpoint_address": "0x80"
+        }
+      }
+    }
+  }
+]

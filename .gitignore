@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+*.egg
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Capture artifacts — device-specific research dumps; reproduce with `lumascope capture`.
+# (Committed test fixtures live in tests/fixtures/*.json and are NOT ignored.)
+/*.jsonl
+*.pcap
+*.pcapng

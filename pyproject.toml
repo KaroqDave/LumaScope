@@ -1,0 +1,41 @@
+[project]
+name = "lumascope"
+version = "0.1.0"
+description = "Automated RGB protocol reverse-engineering harness for the LumaCore project"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "LumaCore" }]
+
+# The decode engine + doctor core are pure stdlib (no install needed to run tests).
+# Optional extras pull in the capture/stimulus backends, which need native wheels
+# that may lag new Python releases (e.g. frida on 3.14). Install only what you use.
+dependencies = []
+
+[project.optional-dependencies]
+frida = ["frida>=16", "frida-tools>=12"]
+stimulus = ["pywinauto>=0.6.8", "openrgb-python>=0.3", "requests>=2.31"]
+image = ["pyautogui>=0.9.54", "opencv-python>=4.9"]
+checksum = ["crcbeagle>=1.0"]
+dev = ["pytest>=8"]
+all = [
+    "frida>=16", "frida-tools>=12",
+    "pywinauto>=0.6.8", "openrgb-python>=0.3", "requests>=2.31",
+    "pyautogui>=0.9.54", "opencv-python>=4.9",
+    "crcbeagle>=1.0", "pytest>=8",
+]
+
+[project.scripts]
+lumascope = "lumascope.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lumascope*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
