@@ -1,0 +1,13 @@
+# Core decode engine + doctor are pure stdlib — nothing required here to run them.
+#
+# Capture / stimulus backends are optional and pulled in per phase. Install the
+# extras you need instead of everything:
+#
+#   pip install -e .[frida]      # Frida USB/HID capture backend (Phase 2)
+#   pip install -e .[stimulus]   # pywinauto / OpenRGB / REST stimulus drivers (Phase 4)
+#   pip install -e .[image]      # pyautogui + opencv image-match clicks (Phase 4 fallback)
+#   pip install -e .[dev]        # pytest
+#   pip install -e .[all]        # everything
+#
+# Native wheels (frida, opencv) may not yet publish for the newest CPython.
+# The decode engine and `lumascope doctor` do not need them.
