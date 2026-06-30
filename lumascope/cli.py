@@ -289,6 +289,32 @@ def _cmd_reassemble(args) -> int:
     return 0
 
 
+def _cmd_inspect(args) -> int:
+    from .capture.serialize import load_frames
+    from .decode import inspect as ins
+
+    frames = load_frames(args.frames)
+    if args.diff:
+        other = load_frames(args.diff)
+        diffs = ins.diff_captures(
+            frames, other, sig_len=args.sig_len,
+            direction=(None if args.direction == "any" else args.direction),
+            vid=args.vid, pid=args.pid,
+        )
+        print(ins.format_diff(diffs, args.frames, args.diff))
+        return 0
+    groups = ins.group_frames(
+        frames, sig_len=args.sig_len,
+        direction=(None if args.direction == "any" else args.direction),
+        vid=args.vid, pid=args.pid,
+    )
+    if not groups:
+        print("no frames matched the filter (wrong vid/pid/direction?)", file=sys.stderr)
+        return 1
+    print(ins.format_groups(groups))
+    return 0
+
+
 def _cmd_stub(phase: str):
     def run(args) -> int:
         print(f"`{args.command}` is not implemented yet (lands in {phase}).", file=sys.stderr)
@@ -368,6 +394,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_re.add_argument("--frames", required=True, help="frame JSONL from `capture`")
     p_re.add_argument("--triplets", action="store_true", help="show buffers as RGB triplets")
     p_re.set_defaults(func=_cmd_reassemble)
+
+    p_ins = sub.add_parser("inspect", help="group a capture by command class, or diff two single-variable captures")
+    p_ins.add_argument("--frames", required=True, help="frame JSONL from `capture`")
+    p_ins.add_argument("--diff", default=None, metavar="OTHER",
+                       help="second capture: report which byte columns changed per command class")
+    p_ins.add_argument("--sig-len", type=int, default=2, dest="sig_len",
+                       help="how many leading bytes define a command class (default: 2 = report+command)")
+    p_ins.add_argument("--direction", choices=("out", "in", "any"), default="out",
+                       help="filter by transfer direction (default: out = host->device)")
+    p_ins.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
+    p_ins.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
+    p_ins.set_defaults(func=_cmd_inspect)
 
     p_replay = sub.add_parser("replay", help="replay a decoded spec to verify it on the device")
     p_replay.add_argument("--spec", default=None, help="path to a spec JSON file")
