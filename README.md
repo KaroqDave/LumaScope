@@ -65,6 +65,7 @@ Run `python -m lumascope.cli <command> --help` for options.
 | `demo <example>` | full synth → decode → validate → C++ pipeline on one example | no |
 | `decode` | decode a saved capture corpus → protocol spec (+ optional C++) | no |
 | `reassemble` | reassemble a chunked/streamed capture into per-channel buffers | no |
+| `inspect` | group a capture by command class, or diff two single-variable captures to localize a changed byte | no |
 | `emit` | render a protocol spec → JSON or C++ skeleton | no |
 | `capture` | record device writes — Frida hook (`--backend frida`) or USBPcap sniff (`--backend usbpcap`) | yes |
 | `sweep` | drive a stimulus through the matrix, capture, pair into a labeled corpus, optionally decode + emit | yes |
@@ -93,6 +94,10 @@ python -m lumascope.cli capture --backend usbpcap --interface \\.\USBPcap1 --dur
 
 # 3. inspect the structure; for streamed/chunked protocols, reassemble per-channel buffers:
 python -m lumascope.cli reassemble --frames caps.jsonl --triplets
+#    for command/mode protocols, group by command class — then change ONE thing and diff to
+#    localize the byte that carries it (the rigorous version of eyeballing two hex dumps):
+python -m lumascope.cli inspect --frames caps.jsonl --vid 0x0b05 --pid 0x19af
+python -m lumascope.cli inspect --frames red.jsonl --diff green.jsonl --vid 0x0b05 --pid 0x19af
 
 # 4. a guided sweep produces a *labeled* corpus and decodes it in one shot:
 python -m lumascope.cli sweep --led-count <N> --driver manual --attach <VendorService> \
@@ -134,7 +139,7 @@ python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>" --wr
 
 ```
 lumascope/
-  cli.py            doctor|selftest|demo|capture|sweep|decode|reassemble|emit|replay
+  cli.py            doctor|selftest|demo|capture|sweep|decode|reassemble|inspect|emit|replay
   model.py          CaptureFrame, SweepStep, Corpus, ProtocolSpec dataclasses
   codec.py          reference encoder: spec + colors -> wire bytes
   synthetic.py      generate labeled captures from a known spec (no hardware)
