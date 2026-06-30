@@ -40,12 +40,18 @@ offset  field            value / meaning
 ```
 
 A full channel update streams 20-LED chunks (60 bytes each) at increasing LED offsets; the
-packet that writes the final chunk has **bit 7 set** in byte 2. After all channels are
-streamed, an apply/commit is sent:
+packet that writes the final chunk has **bit 7 set** in byte 2 (apply-on-last). Channels 0/1/2
+are the three 120-LED addressable headers; **channel 4** (`0x84 = 0x80 | 0x04`) is a small
+**2-LED zone** written at the end of each update:
 
 ```
-EC 40 84 00 02 ...        (0x84 = commit; observed once per full update)
+EC 40 84 00 02 ...        (channel 4, 2 LEDs, apply bit set — closes the update)
 ```
+
+> Earlier this `EC 40 84 00 02` packet was described as a standalone "commit." A later
+> full-vocabulary `inspect` showed it is simply the channel-4 write carrying the `0x80` apply
+> bit; there is no separate dummy commit opcode. The apply bit on the last write per update is
+> the commit — which is exactly what LumaCore already does.
 
 - **Channel order:** **RGB** — confirmed by a CONTROLLED single-color capture (board set to pure
   red → wire triplet `ff 00 00`, i.e. red in position 0). NOTE: an earlier *passive* red→green→blue
@@ -72,6 +78,39 @@ EC 40 80 64 14  ff0000 ...                 (chunk @ LED 100, bit7 = last)
 EC 40 84 00 02  ...                        (commit)
 ```
 
+## Effects are host-streamed — there is no native colored-effect command
+
+A second controlled capture set out to find the "effect" protocol (an `EC 35` mode-set +
+`EC 36` effect-color, by analogy with OpenRGB's mainboard path). **It found neither.** On an
+**addressable** header, *Breathing* and even *Static* are both driven entirely over the already-
+known `EC 40` direct-color path — Armoury Crate renders the animation **in software** and streams
+frames:
+
+| capture (single-variable) | outbound command classes | what changes frame-to-frame |
+|---|---|---|
+| `breathe_red`  | `EC 40` × **2432** | the **R** byte of every LED ramps `0→…→255→…→0`; G/B stay `00` |
+| `breathe_green`| `EC 40` × 2399     | the **G** byte ramps; R/B stay `00`  → **RGB order** re-confirmed |
+| `static_red`   | `EC 40` × **171**  | nothing — a constant `ff0000` buffer, re-asserted periodically |
+
+No `EC 35` and no `EC 36` packet appears in any capture. *Static* vs *Breathing* differ **only in
+the payload values streamed**, never in a mode byte. The recovered breathing brightness envelope is
+a 42-step gamma curve: `0,2,4,6,10,14,19,24,31,37,45,52,61,70,78,88,98,107,118,127,128,137,…,251,253,255`.
+
+This was localized with the `inspect` command (the rigorous "diff two single-variable captures"):
+
+```bash
+lumascope inspect --frames breathe_red.jsonl --vid 0x0b05 --pid 0x19af          # only EC40 present
+lumascope inspect --frames breathe_red.jsonl --diff breathe_green.jsonl         # R cols ↔ G cols
+lumascope inspect --frames static_red.jsonl  --diff breathe_red.jsonl           # steady vs ramped payload
+```
+
+**Implication.** Colored breathing on these addressable channels is not a missing/native protocol —
+it is host-side animation over the *same* `EC 40` writer this doc already specifies (and that
+LumaCore already implements and golden-tests). The only "unlock" needed is a streaming animation
+loop, which is a product/scope choice, not a reverse-engineering gap. **Still uncaptured** (a
+different experiment, on a *fixed* RGB header): whether fixed headers use `EC 35`/`EC 36`, and how
+the autonomous hardware effects (color-cycle `0x04`, rainbow `0x05`) are commanded.
+
 ## Note for LumaCore / LumaScope
 
 This is a **chunked, channel-based, streamed** protocol — one logical LED state spans many
@@ -85,7 +124,7 @@ Reproduce the reassembly from a capture:
 ```bash
 lumascope reassemble --frames aura_red.jsonl --triplets
 # -> framing: prefix=ec40 channel@2(mask 0x7f) offset@3 count@4 payload@5
-#    channel 0/1/2: 360 bytes (~120 LEDs, all ff0000)   channel 4: commit
+#    channel 0/1/2: 360 bytes (~120 LEDs, all ff0000)   channel 4: 6 bytes (2-LED zone)
 ```
 
 `infer_framing` recovered this exact layout autonomously from the real capture. The reassembly
