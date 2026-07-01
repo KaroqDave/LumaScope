@@ -66,6 +66,7 @@ Run `python -m lumascope.cli <command> --help` for options.
 | `decode` | decode a saved capture corpus → protocol spec (+ optional C++) | no |
 | `reassemble` | reassemble a chunked/streamed capture into per-channel buffers | no |
 | `inspect` | group a capture by command class, or diff two single-variable captures to localize a changed byte | no |
+| `cadence` | measure a streamed effect's timing — frame rate + colour-cycle period (i.e. its *speed*) | no |
 | `emit` | render a protocol spec → JSON or C++ skeleton | no |
 | `capture` | record device writes — Frida hook (`--backend frida`) or USBPcap sniff (`--backend usbpcap`) | yes |
 | `sweep` | drive a stimulus through the matrix, capture, pair into a labeled corpus, optionally decode + emit | yes |
@@ -139,7 +140,7 @@ python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>" --wr
 
 ```
 lumascope/
-  cli.py            doctor|selftest|demo|capture|sweep|decode|reassemble|inspect|emit|replay
+  cli.py            doctor|selftest|demo|capture|sweep|decode|reassemble|inspect|cadence|emit|replay
   model.py          CaptureFrame, SweepStep, Corpus, ProtocolSpec dataclasses
   codec.py          reference encoder: spec + colors -> wire bytes
   synthetic.py      generate labeled captures from a known spec (no hardware)
@@ -149,7 +150,7 @@ lumascope/
   replay.py         safety-gated device-write verification
   capture/          base, agent.js, frida_backend, usbpcap_backend, serialize
   stimulus/         base, manual, openrgb_driver, matrix, sync
-  decode/           diff, stride, checksum, encoding, spec, chunked
+  decode/           diff, stride, checksum, encoding, spec, chunked, inspect, cadence
   emit/             spec_json, openrgb_cpp
 tests/              decode/emit/orchestrate/chunked/replay/usbpcap + frida capture (skips off-Windows)
 docs/               asus-aura-pid19af-protocol.md  (worked example)
