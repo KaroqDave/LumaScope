@@ -75,7 +75,7 @@ EC 40 00 28 14  ff0000 ...                 (chunk @ LED 40)
 EC 40 00 3c 14  ff0000 ...                 (chunk @ LED 60)
 EC 40 00 50 14  ff0000 ...                 (chunk @ LED 80)
 EC 40 80 64 14  ff0000 ...                 (chunk @ LED 100, bit7 = last)
-EC 40 84 00 02  ...                        (commit)
+EC 40 84 00 02  ...                        (channel 4 write, apply bit — closes the update)
 ```
 
 ## Armoury Crate drives everything via `EC 40` — there is no native-effect command
