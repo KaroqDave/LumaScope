@@ -56,6 +56,16 @@ def test_inbound_nested_usbhid():
     assert f.endpoint == 4              # 0x84 & 0x7f
 
 
+def test_frame_timestamp_extraction():
+    frames = _frames()
+    # packet 1 has only frame.time_epoch (float seconds) -> used as absolute ns
+    assert frames[0].timestamp_ns == 1_700_000_000_000_000_000
+    # packet 2 has both: frame.time_relative is preferred over the (here bogus) epoch -> 8 ms
+    assert frames[1].timestamp_ns == 8_000_000
+    # packet 3 has no time field -> 0, not a crash
+    assert frames[2].timestamp_ns == 0
+
+
 def test_accepts_decoded_list_and_string():
     import json
 

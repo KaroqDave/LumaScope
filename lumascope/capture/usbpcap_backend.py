@@ -109,6 +109,7 @@ def parse_tshark_packets(data) -> list[CaptureFrame]:
 
         frames.append(CaptureFrame(
             data=raw,
+            timestamp_ns=_frame_time_ns(flat),
             source="usbpcap",
             api="usbpcap",
             direction=direction,
@@ -119,6 +120,33 @@ def parse_tshark_packets(data) -> list[CaptureFrame]:
             meta={"transfer_type": flat.get("usb.transfer_type")},
         ))
     return frames
+
+
+def _seconds_to_ns(v) -> Optional[int]:
+    """Float seconds -> integer ns. Returns None for missing/non-float values (e.g. some tshark
+    builds render ``frame.time_epoch`` as an ISO-8601 string rather than epoch seconds)."""
+    if v is None:
+        return None
+    try:
+        return int(round(float(v) * 1_000_000_000))
+    except (ValueError, TypeError):
+        return None
+
+
+def _frame_time_ns(flat: dict) -> int:
+    """Capture timestamp in nanoseconds.
+
+    Timing is the only signal for streamed-effect *rate* (a software-rendered animation carries
+    no speed byte — speed shows up as how fast frames advance), so preserve it. Prefers
+    ``frame.time_relative`` (float seconds since capture start — robust across tshark versions and
+    all that rate analysis needs); falls back to an absolute ``frame.time_epoch`` when that build
+    emits it as float epoch seconds. 0 when neither is usable.
+    """
+    ns = _seconds_to_ns(flat.get("frame.time_relative"))
+    if ns is not None:
+        return ns
+    ns = _seconds_to_ns(flat.get("frame.time_epoch"))
+    return ns if ns is not None else 0
 
 
 def find_usbpcapcmd() -> Optional[str]:
