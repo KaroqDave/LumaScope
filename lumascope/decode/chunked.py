@@ -39,6 +39,8 @@ class ChunkFraming:
     count_pos: int
     payload_start: int
     unit: int = 1
+    chunk_count: int = 0
+    final_flag: int = 0  # OR-ed into the channel byte on the final chunk, if any
 
     def matches(self, data: bytes) -> bool:
         return len(data) >= self.payload_start and data[: len(self.prefix)] == self.prefix
@@ -76,12 +78,25 @@ def infer_framing(frames: list[CaptureFrame]) -> Optional[ChunkFraming]:
     datas = [f.data for f in frames if f.data]
     if len(datas) < 2:
         return None
-    prefix_len = _common_prefix_len(datas)
-    if prefix_len == 0:
+    common_prefix = _common_prefix_len(datas)
+    if common_prefix == 0:
         return None  # no stable command prefix -> not a single command class
     n = min(len(d) for d in datas)
-    if prefix_len + 3 > n:
-        return None
+
+    # The channel byte may be constant in a single-channel stream with no final-chunk flag.
+    # In that case a naive common-prefix pass would swallow it and misclassify the first
+    # payload byte as a header field. Try every plausible prefix length, shortest first, so
+    # constant-but-semantic header bytes remain available for classification.
+    for prefix_len in range(1, common_prefix + 1):
+        if prefix_len + 3 > n:
+            continue
+        model = _infer_at_prefix(datas, prefix_len)
+        if model is not None:
+            return model
+    return None
+
+
+def _infer_at_prefix(datas: list[bytes], prefix_len: int) -> Optional[ChunkFraming]:
     header = list(range(prefix_len, prefix_len + 3))  # channel / offset / count, some order
     cols = {i: [d[i] for d in datas] for i in header}
     card = {i: len(set(v)) for i, v in cols.items()}
@@ -101,15 +116,18 @@ def infer_framing(frames: list[CaptureFrame]) -> Optional[ChunkFraming]:
                 continue
             channel_pos = next(i for i in header if i not in (count_pos, offset_pos))
             channel_mask = 0x7F if any(v & 0x80 for v in cols[channel_pos]) else 0xFF
+            final_flag = max((v & ~channel_mask) for v in cols[channel_pos])
             payload_start = prefix_len + 3
             return ChunkFraming(
                 prefix=bytes(datas[0][:prefix_len]),
                 channel_pos=channel_pos,
                 channel_mask=channel_mask,
+                final_flag=final_flag,
                 offset_pos=offset_pos,
                 count_pos=count_pos,
                 payload_start=payload_start,
                 unit=_infer_unit(datas, payload_start, count_pos, count_mode),
+                chunk_count=count_mode,
             )
     return None
 

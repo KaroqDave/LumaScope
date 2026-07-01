@@ -12,6 +12,7 @@ from typing import Any
 from ..model import (
     BrightnessField,
     ChecksumModel,
+    ChunkingModel,
     HeaderField,
     LedLayout,
     ProtocolSpec,
@@ -58,6 +59,20 @@ def spec_to_dict(s: ProtocolSpec) -> dict[str, Any]:
             "range": list(s.checksum.range) if s.checksum.range else None,
             "params": s.checksum.params,
         },
+        "chunking": {
+            "present": s.chunking.present,
+            "packet_len": s.chunking.packet_len,
+            "prefix": list(s.chunking.prefix),
+            "channel": s.chunking.channel,
+            "channel_pos": s.chunking.channel_pos,
+            "channel_mask": s.chunking.channel_mask,
+            "final_flag": s.chunking.final_flag,
+            "offset_pos": s.chunking.offset_pos,
+            "count_pos": s.chunking.count_pos,
+            "payload_start": s.chunking.payload_start,
+            "unit": s.chunking.unit,
+            "chunk_count": s.chunking.chunk_count,
+        },
         "notes": s.notes,
     }
 
@@ -68,6 +83,7 @@ def spec_from_dict(d: dict[str, Any]) -> ProtocolSpec:
     sc = le.get("scaling", {})
     br = d.get("brightness", {})
     cs = d.get("checksum", {})
+    ch = d.get("chunking", {})
     return ProtocolSpec(
         name=d.get("name", "unknown"),
         transport=d.get("transport", "hid_feature"),
@@ -107,6 +123,20 @@ def spec_from_dict(d: dict[str, Any]) -> ProtocolSpec:
             endian=cs.get("endian", "little"),
             range=tuple(cs["range"]) if cs.get("range") else None,
             params=cs.get("params", {}),
+        ),
+        chunking=ChunkingModel(
+            present=ch.get("present", False),
+            packet_len=ch.get("packet_len", 0),
+            prefix=bytes(ch.get("prefix", [])),
+            channel=ch.get("channel", 0),
+            channel_pos=ch.get("channel_pos", 0),
+            channel_mask=ch.get("channel_mask", 0xFF),
+            final_flag=ch.get("final_flag", 0),
+            offset_pos=ch.get("offset_pos", 0),
+            count_pos=ch.get("count_pos", 0),
+            payload_start=ch.get("payload_start", 0),
+            unit=ch.get("unit", 1),
+            chunk_count=ch.get("chunk_count", 0),
         ),
         notes=d.get("notes", []),
     )
