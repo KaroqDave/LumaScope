@@ -29,11 +29,18 @@ end-to-end on a live machine:
    the bus-sniffing fallback exists for).
 3. **Decoded** the `EC 40` chunked direct-colour protocol: report `0xEC`, command `0x40`, 3
    channels of up to 120 LEDs, RGB order, 20 LEDs/packet, apply-flag on the final chunk.
+4. **Characterised the effects** with `inspect` (single-variable command-class diffs): every mode —
+   static, breathing, colour-cycle, rainbow, fixed *and* addressable — is host-streamed over that
+   same `EC 40` path. Armoury Crate uses **no** native effect command (`EC 35`/`EC 36` never appear).
+5. **Measured effect speed** with `cadence` (per-frame timing): speed is not a wire field but a
+   host-side phase rate — the rainbow's cycle period spans ~1.6 s (fast) to ~16.5 s (slow) at a
+   fixed ~180–200 Hz refresh.
 
 A controlled single-colour capture confirmed **RGB** order, and the result — written up in
 [docs/asus-aura-pid19af-protocol.md](docs/asus-aura-pid19af-protocol.md) — matches LumaCore's
 existing encoder, locked by a passing golden test. That doc is the best worked example of the
-whole loop.
+whole loop, and the methodological punchline: because Armoury Crate streams everything, an Aura
+capture cannot reach the `EC 35`/`EC 36` path (that needs an OpenRGB capture or a guarded write).
 
 ## Install
 
