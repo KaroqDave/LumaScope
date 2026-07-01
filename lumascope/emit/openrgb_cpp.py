@@ -23,6 +23,8 @@ def _class_name(name: str) -> str:
 
 def _led_offset_expr(spec: ProtocolSpec, wire_pos: int) -> str:
     le = spec.leds
+    if le.explicit_offsets is not None:
+        return f"LED_OFFSETS[i][{wire_pos}]"
     if le.layout == "planar":
         return f"{le.base_offset} + {wire_pos}*LED_COUNT + i"
     return f"{le.base_offset} + i*STRIDE + {wire_pos}"
@@ -31,13 +33,23 @@ def _led_offset_expr(spec: ProtocolSpec, wire_pos: int) -> str:
 def _scale_body(spec: ProtocolSpec) -> str:
     sc = spec.leds.scaling
     if sc.type == "linear":
-        return f"    return (uint8_t)std::lround(v * {sc.k!r});"
+        return f"    return clamp8((int)std::lround(v * {sc.k!r}));"
     if sc.type == "gamma":
         return (
             "    // gamma correction recovered from capture\n"
-            f"    return (uint8_t)std::lround(255.0 * std::pow(v / 255.0, {sc.gamma!r}));"
+            f"    return clamp8((int)std::lround(255.0 * std::pow(v / 255.0, {sc.gamma!r})));"
         )
-    return "    return v;  // identity"
+    return "    return clamp8(v);  // identity"
+
+
+def _explicit_offset_table(spec: ProtocolSpec) -> str:
+    offsets = spec.leds.explicit_offsets
+    if offsets is None:
+        return ""
+    rows = ",\n".join(
+        "            {" + ", ".join(str(v) for v in row) + "}" for row in offsets
+    )
+    return f"        static const int LED_OFFSETS[LED_COUNT][3] = {{\n{rows}\n        }};\n"
 
 
 def _reflect_helpers(width: int, refin: bool, refout: bool) -> str:
@@ -155,15 +167,41 @@ def _checksum_section(cs: ChecksumModel) -> tuple[str, str]:
     return defn + "\n", apply
 
 
-def _send_call(spec: ProtocolSpec) -> str:
+def _raw_send_call(spec: ProtocolSpec, var: str, *, indent: str = "    ") -> str:
     if spec.transport == "hid_feature":
-        return "    hid_send_feature_report(dev, buf.data(), buf.size());"
+        return f"{indent}hid_send_feature_report(dev, {var}.data(), {var}.size());"
     if spec.transport in ("hid_output", "hid_interrupt"):
-        return "    hid_write(dev, buf.data(), buf.size());"
+        return f"{indent}hid_write(dev, {var}.data(), {var}.size());"
     if spec.transport == "usb_control":
-        return ("    // TODO: control transfer (libusb_control_transfer / WinUsb_ControlTransfer)\n"
-                "    hid_send_feature_report(dev, buf.data(), buf.size());")
-    return "    // TODO: SMBus write sequence — see lumascope SMBus capture notes"
+        return f'{indent}throw std::runtime_error("usb_control replay is not implemented");'
+    return f'{indent}throw std::runtime_error("SMBus replay is not implemented");'
+
+
+def _send_packet_body(spec: ProtocolSpec) -> str:
+    ch = spec.chunking
+    if not ch.present:
+        return _raw_send_call(spec, "buf")
+
+    capacity = ch.packet_len - ch.payload_start
+    capacity_payload = capacity - (capacity % ch.unit) if ch.unit else 0
+    max_payload = min(ch.chunk_count * ch.unit if ch.chunk_count else capacity_payload, capacity_payload)
+    prefix_lines = "\n".join(
+        f"            pkt[{i}] = 0x{b:02X};" for i, b in enumerate(ch.prefix)
+    ) or "            // (no chunk prefix bytes)"
+    send = _raw_send_call(spec, "pkt", indent="            ")
+    return f"""    const size_t max_payload = {max_payload};
+    if (max_payload == 0) throw std::runtime_error("invalid chunk payload capacity");
+    for (size_t offset = 0; offset < buf.size(); offset += max_payload) {{
+        const size_t payload_len = std::min(max_payload, buf.size() - offset);
+        const bool last = (offset + payload_len) >= buf.size();
+        std::vector<uint8_t> pkt(CHUNK_PACKET_LEN, 0x00);
+{prefix_lines}
+        pkt[CHUNK_CHANNEL_POS] = (uint8_t)(CHUNK_CHANNEL | (last ? CHUNK_FINAL_FLAG : 0));
+        pkt[CHUNK_OFFSET_POS] = (uint8_t)(offset / CHUNK_UNIT);
+        pkt[CHUNK_COUNT_POS] = (uint8_t)(payload_len / CHUNK_UNIT);
+        for (size_t j = 0; j < payload_len; j++) pkt[CHUNK_PAYLOAD_START + j] = buf[offset + j];
+{send}
+    }}"""
 
 
 def render_cpp(spec: ProtocolSpec) -> str:
@@ -171,9 +209,12 @@ def render_cpp(spec: ProtocolSpec) -> str:
     cs_defs, cs_apply = _checksum_section(spec.checksum)
     le = spec.leds
 
-    report_line = (
-        f"    buf[0] = REPORT_ID;\n" if spec.report_id is not None else "    // (no HID report id)\n"
-    )
+    if spec.chunking.present:
+        report_line = "    // (report id / command bytes live in the chunk prefix)\n"
+    else:
+        report_line = (
+            f"    buf[0] = REPORT_ID;\n" if spec.report_id is not None else "    // (no HID report id)\n"
+        )
     header_lines = "".join(
         f"    buf[{o}] = 0x{v:02X};\n" for o, v in spec.header.constant_bytes
     ) or "    // (no fixed header bytes)\n"
@@ -186,12 +227,13 @@ def render_cpp(spec: ProtocolSpec) -> str:
             f"scale(RGBGet{ch}Value(colors[i]));"
         )
     pack_block = "\n".join(pack_lines)
+    offset_table = _explicit_offset_table(spec)
 
     if spec.brightness.present and spec.brightness.offset is not None:
         b = spec.brightness
         bright_line = (
-            f"    buf[{b.offset}] = (uint8_t)({b.min} + "
-            f"std::lround(brightness * ({b.max} - {b.min}) / 255.0));\n"
+            f"    buf[{b.offset}] = clamp8((int)({b.min} + "
+            f"std::lround(brightness * ({b.max} - {b.min}) / 255.0)));\n"
         )
     else:
         bright_line = "    // (no global brightness byte)\n"
@@ -204,7 +246,23 @@ def render_cpp(spec: ProtocolSpec) -> str:
         f"transport={spec.transport} vid={vid} pid={pid} packet_len={spec.packet_len} "
         f"leds={le.count} layout={le.layout} order={le.channel_order} "
         f"stride={le.stride} scaling={le.scaling.type} checksum={spec.checksum.kind}"
+        f"{' chunked' if spec.chunking.present else ''}"
     )
+    ch = spec.chunking
+    chunk_constants = ""
+    if ch.present:
+        chunk_constants = (
+            f"    static constexpr int      CHUNK_PACKET_LEN    = {ch.packet_len};\n"
+            f"    static constexpr uint8_t  CHUNK_CHANNEL       = 0x{ch.channel:02X};\n"
+            f"    static constexpr uint8_t  CHUNK_FINAL_FLAG    = 0x{ch.final_flag:02X};\n"
+            f"    static constexpr int      CHUNK_CHANNEL_POS   = {ch.channel_pos};\n"
+            f"    static constexpr int      CHUNK_OFFSET_POS    = {ch.offset_pos};\n"
+            f"    static constexpr int      CHUNK_COUNT_POS     = {ch.count_pos};\n"
+            f"    static constexpr int      CHUNK_PAYLOAD_START = {ch.payload_start};\n"
+            f"    static constexpr int      CHUNK_UNIT          = {ch.unit};\n"
+            f"    static constexpr int      CHUNK_COUNT         = {ch.chunk_count};\n"
+        )
+    send_body = _send_packet_body(spec)
 
     return f"""// ---------------------------------------------------------------------------
 // {cls}  --  generated by LumaScope
@@ -214,8 +272,10 @@ def render_cpp(spec: ProtocolSpec) -> str:
 // the packet packing below is the protocol LumaScope recovered and validated.
 // ---------------------------------------------------------------------------
 #include <hidapi.h>
+#include <algorithm>
 #include <vector>
 #include <cstdint>
+#include <stdexcept>
 #include <cmath>
 
 #ifndef RGBGetRValue
@@ -233,12 +293,14 @@ public:
     static constexpr int      LED_COUNT  = {le.count};
     static constexpr int      STRIDE     = {le.stride};
     static constexpr int      PACKET_LEN = {spec.packet_len};
+{chunk_constants}
 
     explicit {cls}(hid_device* dev) : dev(dev) {{}}
 
     void UpdateLEDs(const std::vector<RGBColor>& colors, uint8_t brightness = 255) {{
         std::vector<uint8_t> buf(PACKET_LEN, 0x00);
 {report_line}{header_lines}
+{offset_table}
         for (int i = 0; i < LED_COUNT && i < (int)colors.size(); i++) {{
 {pack_block}
         }}
@@ -248,6 +310,10 @@ public:
 private:
     hid_device* dev;
 
+    static uint8_t clamp8(int v) {{
+        return (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }}
+
     static uint8_t scale(int v) {{
 {_scale_body(spec)}
     }}
@@ -255,7 +321,7 @@ private:
     {cs_defs.rstrip()}
 
     void SendPacket(std::vector<uint8_t>& buf) {{
-{_send_call(spec)}
+{send_body}
     }}
 }};
 """

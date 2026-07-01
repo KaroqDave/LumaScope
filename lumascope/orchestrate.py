@@ -121,9 +121,56 @@ def _pair_chunked(
         for step, chans in per_step:
             buf = chans.get(target)
             if buf:
-                frame = CaptureFrame(data=buf, source="reassembled", transfer="output", direction="out")
+                meta = {"chunking": _chunking_meta(framing, raw, target)}
+                transfer = _chunk_transport(raw)
+                frame = CaptureFrame(
+                    data=buf,
+                    source="reassembled",
+                    transfer=transfer,
+                    direction="out",
+                    meta=meta,
+                )
                 labeled.append(LabeledFrame(step=step, frame=frame))
     return Corpus(frames=labeled, led_count=led_count, device_name=device_name, vid=vid, pid=pid)
+
+
+def _chunking_meta(
+    framing: ChunkFraming,
+    raw: list[tuple[SweepStep, list[CaptureFrame]]],
+    channel: int,
+) -> dict:
+    packet_len = 0
+    for _step, frames in raw:
+        for f in frames:
+            if framing.matches(f.data):
+                packet_len = len(f.data)
+                break
+        if packet_len:
+            break
+    return {
+        "packet_len": packet_len,
+        "prefix": list(framing.prefix),
+        "channel": channel,
+        "channel_pos": framing.channel_pos,
+        "channel_mask": framing.channel_mask,
+        "final_flag": framing.final_flag,
+        "offset_pos": framing.offset_pos,
+        "count_pos": framing.count_pos,
+        "payload_start": framing.payload_start,
+        "unit": framing.unit,
+        "chunk_count": framing.chunk_count,
+    }
+
+
+def _chunk_transport(raw: list[tuple[SweepStep, list[CaptureFrame]]]) -> str:
+    transfers: Counter[str] = Counter()
+    for _step, frames in raw:
+        for f in frames:
+            if f.direction != "out" or not f.data:
+                continue
+            if f.transfer:
+                transfers[f.transfer] += 1
+    return transfers.most_common(1)[0][0] if transfers else "output"
 
 
 def run_sweep(
@@ -152,9 +199,13 @@ def run_sweep(
     steps = steps if steps is not None else matrix.generate(led_count)
     raw: list[tuple[SweepStep, list[CaptureFrame]]] = []
 
-    driver.setup(led_count)
-    backend.open()
+    driver_started = False
+    backend_started = False
     try:
+        driver.setup(led_count)
+        driver_started = True
+        backend.open()
+        backend_started = True
         for step in steps:
             backend.drain()  # drop frames buffered before this step's state was applied
             applied = driver.set_state(step)
@@ -167,8 +218,10 @@ def run_sweep(
             if log:
                 log(f"step {step.step_id} ({step.describe()}): {len(frames)} frame(s)")
     finally:
-        backend.close()
-        driver.teardown()
+        if backend_started:
+            backend.close()
+        if driver_started:
+            driver.teardown()
 
     corpus = pair(raw, led_count, device_name=device_name, vid=vid, pid=pid,
                   chunked=chunked, channel=channel)

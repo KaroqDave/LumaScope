@@ -8,6 +8,7 @@ from lumascope import examples, synthetic
 from lumascope.capture.serialize import corpus_from_dict, corpus_to_dict
 from lumascope.emit import render_cpp, spec_from_dict, spec_to_dict
 from lumascope.emit.openrgb_cpp import _class_name
+from lumascope.model import ChunkingModel, LedLayout, ProtocolSpec, Scaling
 
 
 @pytest.mark.parametrize("factory", examples.ALL, ids=[f.__name__ for f in examples.ALL])
@@ -25,6 +26,30 @@ def test_corpus_json_round_trips(factory):
     assert again.led_count == corpus.led_count
     assert again.frames[0].data == corpus.frames[0].data
     assert again.frames[5].step.colors == corpus.frames[5].step.colors
+
+
+def test_chunking_json_round_trips():
+    spec = examples.no_checksum_identity()
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=8,
+        prefix=b"\xEC\x40",
+        channel=2,
+        channel_pos=2,
+        channel_mask=0x7F,
+        final_flag=0x80,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=3,
+        chunk_count=1,
+    )
+    again = spec_from_dict(spec_to_dict(spec))
+    assert again.chunking.present
+    assert again.chunking.prefix == b"\xEC\x40"
+    assert again.chunking.channel == 2
+    assert again.chunking.unit == 3
+    assert again.chunking.chunk_count == 1
 
 
 def test_cpp_contains_recovered_constants():
@@ -57,3 +82,55 @@ def test_cpp_no_checksum_is_noted():
     cpp = render_cpp(examples.no_checksum_identity())
     assert "no checksum" in cpp.lower()
     assert "hid_write" in cpp        # interrupt transport
+
+
+def test_cpp_clamps_scaled_values():
+    spec = examples.no_checksum_identity()
+    spec.leds.scaling = Scaling(type="linear", k=2.0)
+    cpp = render_cpp(spec)
+    assert "clamp8((int)std::lround(v * 2.0))" in cpp
+
+
+def test_cpp_uses_explicit_offsets_table():
+    spec = ProtocolSpec(
+        name="explicit",
+        packet_len=16,
+        leds=LedLayout(
+            count=2,
+            channel_order="RGB",
+            explicit_offsets=[(5, 2, 9), (6, 3, 10)],
+        ),
+    )
+    cpp = render_cpp(spec)
+    assert "LED_OFFSETS[LED_COUNT][3]" in cpp
+    assert "buf[LED_OFFSETS[i][0]]" in cpp
+
+
+def test_cpp_emits_chunked_send_loop():
+    spec = examples.no_checksum_identity()
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=8,
+        prefix=b"\xEC\x40",
+        channel=0,
+        channel_pos=2,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=1,
+        chunk_count=3,
+        final_flag=0x80,
+    )
+    cpp = render_cpp(spec)
+    assert "CHUNK_PACKET_LEN" in cpp
+    assert "pkt[0] = 0xEC;" in cpp
+    assert "CHUNK_FINAL_FLAG" in cpp
+    assert "for (size_t offset = 0; offset < buf.size(); offset += max_payload)" in cpp
+
+
+def test_cpp_unsupported_transport_throws_instead_of_hid_fallback():
+    spec = examples.no_checksum_identity()
+    spec.transport = "usb_control"
+    cpp = render_cpp(spec)
+    assert "throw std::runtime_error(\"usb_control replay is not implemented\")" in cpp
+    assert "libusb_control_transfer" not in cpp

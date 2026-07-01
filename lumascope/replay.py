@@ -17,7 +17,7 @@ byte-identically to its ground truth); the device write needs your hardware.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from . import codec
@@ -29,6 +29,7 @@ class ReplayStep:
     label: str
     colors: list[Color]
     data: bytes
+    packets: list[bytes] = field(default_factory=list)
 
 
 def build_replay_sequence(spec: ProtocolSpec, *, brightness: int = 255, walk: bool = True) -> list[ReplayStep]:
@@ -52,10 +53,15 @@ def build_replay_sequence(spec: ProtocolSpec, *, brightness: int = 255, walk: bo
             patterns.append((f"walk LED {i}", colors))
 
     return [
-        ReplayStep(label=label, colors=colors,
-                   data=codec.encode_frame(spec, colors, brightness=brightness))
+        _replay_step(spec, label, colors, brightness=brightness)
         for label, colors in patterns
     ]
+
+
+def _replay_step(spec: ProtocolSpec, label: str, colors: list[Color], *, brightness: int) -> ReplayStep:
+    packets = codec.encode_packets(spec, colors, brightness=brightness)
+    data = packets[0] if len(packets) == 1 else b"".join(packets)
+    return ReplayStep(label=label, colors=colors, data=data, packets=packets)
 
 
 class HidReplayWriter:
@@ -93,9 +99,13 @@ class HidReplayWriter:
 
         if self.spec.transport == "hid_feature":
             ok = ctypes.windll.hid.HidD_SetFeature(self._h, data, len(data))
-        else:  # hid_output / default: WriteFile delivers the output report
+        elif self.spec.transport in ("hid_output", "hid_interrupt"):
             written = w.DWORD(0)
             ok = self._k.WriteFile(self._h, data, len(data), ctypes.byref(written), None)
+            if ok and written.value != len(data):
+                raise OSError(f"short device write ({written.value}/{len(data)} bytes)")
+        else:
+            raise RuntimeError(f"replay does not support transport {self.spec.transport!r}")
         if not ok:
             raise OSError(f"device write failed (GetLastError={ctypes.get_last_error()})")
 
@@ -124,7 +134,11 @@ def write_sequence(
     if dry_run or not confirm:
         out("[dry-run] no device writes. Packets that WOULD be sent:")
         for s in steps:
-            out(f"  {s.label:14} {len(s.data):3}B  {s.data.hex()}")
+            packets = s.packets or [s.data]
+            suffix = f" ({len(packets)} chunks)" if len(packets) > 1 else ""
+            out(f"  {s.label:14} {sum(len(p) for p in packets):3}B{suffix}")
+            for packet in packets:
+                out(f"      {len(packet):3}B  {packet.hex()}")
         out("Re-run with --write --yes (vendor app CLOSED) to send these to the device.")
         return False
 
@@ -136,7 +150,8 @@ def write_sequence(
     out(f"writing {len(steps)} replay packet(s) to {device_path}")
     try:
         for s in steps:
-            writer.write(s.data)
+            for packet in (s.packets or [s.data]):
+                writer.write(packet)
             out(f"  sent {s.label}")
             time.sleep(settle)
     finally:

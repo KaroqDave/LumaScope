@@ -146,8 +146,10 @@ def encode_frame(
     """Build one wire frame for ``colors`` (per-LED logical RGB) under ``spec``."""
     buf = bytearray(spec.packet_len)
 
-    # Report ID (byte 0 for feature/output reports), if the transport carries it.
-    if spec.report_id is not None and spec.packet_len > 0:
+    # Report ID (byte 0 for feature/output reports), if the transport carries it. For
+    # chunked specs this frame is the logical payload buffer; the report id lives in
+    # the chunk prefix instead.
+    if not spec.chunking.present and spec.report_id is not None and spec.packet_len > 0:
         buf[0] = spec.report_id & 0xFF
 
     # Fixed header bytes.
@@ -179,3 +181,54 @@ def encode_frame(
         buf[cs.offset : cs.offset + cs.width] = checksum_bytes(cs, value)
 
     return bytes(buf)
+
+
+def encode_packets(
+    spec: ProtocolSpec,
+    colors: list[Color],
+    brightness: int = 255,
+    command: int | None = None,
+    mode_value: int | None = None,
+) -> list[bytes]:
+    """Build the actual wire packet(s) for ``colors`` under ``spec``.
+
+    Single-packet protocols return one frame. Chunked protocols first build the logical
+    LED buffer with :func:`encode_frame`, then split it using the recovered chunk header.
+    """
+    frame = encode_frame(
+        spec, colors, brightness=brightness, command=command, mode_value=mode_value
+    )
+    ch = spec.chunking
+    if not ch.present:
+        return [frame]
+    return chunk_payload(spec, frame)
+
+
+def chunk_payload(spec: ProtocolSpec, payload: bytes) -> list[bytes]:
+    """Split a logical payload buffer into recovered wire chunks."""
+    ch = spec.chunking
+    if not ch.present:
+        return [payload]
+    if ch.packet_len <= 0 or ch.payload_start >= ch.packet_len:
+        raise ValueError("invalid chunking packet length/payload_start")
+    if ch.unit <= 0:
+        raise ValueError("invalid chunking unit")
+
+    capacity = ch.packet_len - ch.payload_start
+    max_payload = ch.chunk_count * ch.unit if ch.chunk_count else capacity - (capacity % ch.unit)
+    max_payload = min(max_payload, capacity - (capacity % ch.unit))
+    if max_payload <= 0:
+        raise ValueError("chunk payload capacity is smaller than one unit")
+
+    packets: list[bytes] = []
+    for offset in range(0, len(payload), max_payload):
+        piece = payload[offset: offset + max_payload]
+        pkt = bytearray(ch.packet_len)
+        pkt[: len(ch.prefix)] = ch.prefix
+        last = offset + len(piece) >= len(payload)
+        pkt[ch.channel_pos] = (ch.channel | (ch.final_flag if last else 0)) & 0xFF
+        pkt[ch.offset_pos] = (offset // ch.unit) & 0xFF
+        pkt[ch.count_pos] = (len(piece) // ch.unit) & 0xFF
+        pkt[ch.payload_start: ch.payload_start + len(piece)] = piece
+        packets.append(bytes(pkt))
+    return packets

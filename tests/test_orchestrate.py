@@ -6,7 +6,7 @@ into the backend, exactly as a live capture would surface them. The orchestrator
 into a Corpus and the real decode engine must recover the known ground-truth spec — proving
 the drive->capture->pair->decode wiring end to end.
 """
-from lumascope import examples, orchestrate
+from lumascope import codec, examples, orchestrate
 from lumascope.capture.base import CaptureBackend
 from lumascope.decode import decode
 from lumascope.model import KIND_UNIFORM, CaptureFrame, SweepStep
@@ -84,11 +84,13 @@ class ChunkedDriver(StimulusDriver):
     name = "chunked-mock"
     _IDX = {"R": 0, "G": 1, "B": 2}
 
-    def __init__(self, backend, *, order="GRB", chunk=6, channel=0):
+    def __init__(self, backend, *, order="GRB", chunk=6, channel=0, transfer="", report_id=None):
         self.backend = backend
         self.order = order
         self.chunk = chunk
         self.channel = channel
+        self.transfer = transfer
+        self.report_id = report_id
 
     def set_state(self, step):
         buf = bytearray()
@@ -102,7 +104,12 @@ class ChunkedDriver(StimulusDriver):
             head = bytes([0xEC, 0x40, self.channel | (0x80 if last else 0), off, len(piece)])
             data = head + bytes(piece)
             data += b"\x00" * (65 - len(data))
-            self.backend._push(CaptureFrame(data=bytes(data[:65]), direction="out"))
+            self.backend._push(CaptureFrame(
+                data=bytes(data[:65]),
+                direction="out",
+                transfer=self.transfer,
+                report_id=self.report_id,
+            ))
         return True
 
 
@@ -120,6 +127,21 @@ def test_chunked_sweep_reassembles_and_decodes():
     assert result.validation.ok, result.validation.summary()
     assert result.spec.leds.channel_order == "GRB"      # recovered the wire order
     assert result.spec.leds.count == 8
+    assert result.spec.chunking.present
+    assert result.spec.chunking.packet_len == 65
+    assert result.spec.chunking.chunk_count == 6
+    assert codec.encode_packets(result.spec, raw[0][0].colors) == [f.data for f in raw[0][1]]
+
+
+def test_chunked_reassembly_keeps_report_id_in_prefix_only():
+    backend = MockBackend()
+    driver = ChunkedDriver(backend, transfer="feature", report_id=0xEC)
+    corpus, _raw = orchestrate.run_sweep(backend, driver, led_count=4, **FAST)
+    result = decode(corpus, name="chunked-feature")
+    assert result.validation.ok, result.validation.summary()
+    assert result.spec.transport == "hid_feature"
+    assert result.spec.report_id is None
+    assert result.spec.chunking.prefix == b"\xEC\x40"
 
 
 def test_chunked_disabled_falls_back_to_single_packet():
@@ -141,3 +163,35 @@ def test_skipped_step_contributes_no_frame():
     corpus, raw = orchestrate.run_sweep(backend, SkipDriver(), led_count=2, **FAST)
     assert raw == []
     assert corpus.frames == []
+
+
+def test_driver_teardown_runs_when_backend_open_fails():
+    class FailingBackend(MockBackend):
+        def open(self) -> None:
+            raise RuntimeError("boom")
+
+    class TrackingDriver(StimulusDriver):
+        name = "tracking"
+
+        def __init__(self):
+            self.setup_called = False
+            self.teardown_called = False
+
+        def setup(self, led_count: int) -> None:
+            self.setup_called = True
+
+        def set_state(self, step):
+            return True
+
+        def teardown(self) -> None:
+            self.teardown_called = True
+
+    driver = TrackingDriver()
+    try:
+        orchestrate.run_sweep(FailingBackend(), driver, led_count=2, **FAST)
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+    else:
+        raise AssertionError("backend open failure should propagate")
+    assert driver.setup_called
+    assert driver.teardown_called

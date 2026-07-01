@@ -42,6 +42,24 @@ def test_infer_framing_recovers_layout():
     assert fr.channel_pos == 2 and fr.channel_mask == 0x7F   # flag bit detected + stripped
     assert fr.offset_pos == 3 and fr.count_pos == 4
     assert fr.payload_start == 5
+    assert fr.final_flag == 0x80
+    assert fr.chunk_count == 20
+
+
+def test_infer_framing_keeps_constant_channel_out_of_prefix():
+    # A single-channel stream with no last-chunk flag has a constant channel byte. It is still
+    # semantic header, not part of the command prefix.
+    bufs = {0: bytes(range(30))}
+    fr = infer_framing(build_chunks(bufs, chunk=10, flag=0))
+    assert fr is not None
+    assert fr.prefix == b"\xec\x40"
+    assert fr.channel_pos == 2
+    assert fr.offset_pos == 3
+    assert fr.count_pos == 4
+    assert fr.payload_start == 5
+    assert fr.final_flag == 0
+    assert fr.chunk_count == 10
+    assert reassemble(build_chunks(bufs, chunk=10, flag=0), fr)[0] == bufs[0]
 
 
 def test_reassemble_auto_end_to_end():

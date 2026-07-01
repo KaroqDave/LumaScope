@@ -187,6 +187,24 @@ class ChecksumModel:
 
 
 @dataclass
+class ChunkingModel:
+    """How a logical LED buffer is split into fixed-size wire chunks."""
+
+    present: bool = False
+    packet_len: int = 0
+    prefix: bytes = b""
+    channel: int = 0
+    channel_pos: int = 0
+    channel_mask: int = 0xFF
+    final_flag: int = 0
+    offset_pos: int = 0
+    count_pos: int = 0
+    payload_start: int = 0
+    unit: int = 1
+    chunk_count: int = 0
+
+
+@dataclass
 class ProtocolSpec:
     name: str = "unknown"
     transport: str = "hid_feature"   # hid_feature|hid_output|hid_interrupt|usb_control|smbus
@@ -196,6 +214,7 @@ class ProtocolSpec:
     leds: LedLayout = field(default_factory=LedLayout)
     brightness: BrightnessField = field(default_factory=BrightnessField)
     checksum: ChecksumModel = field(default_factory=ChecksumModel)
+    chunking: ChunkingModel = field(default_factory=ChunkingModel)
     vid: Optional[int] = None
     pid: Optional[int] = None
     notes: list[str] = field(default_factory=list)

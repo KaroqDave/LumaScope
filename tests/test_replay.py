@@ -8,6 +8,7 @@ import pytest
 
 from lumascope import examples, replay, synthetic
 from lumascope.decode import decode
+from lumascope.model import ChunkingModel
 
 
 def test_decoded_spec_replays_identically_to_ground_truth():
@@ -54,3 +55,32 @@ def test_confirmed_write_requires_device_path():
     steps = replay.build_replay_sequence(spec)
     with pytest.raises(RuntimeError):
         replay.write_sequence(spec, steps, device_path=None, confirm=True, dry_run=False, out=lambda m: None)
+
+
+def test_chunked_replay_steps_expose_individual_packets():
+    spec = examples.no_checksum_identity()
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=8,
+        prefix=b"\xEC\x40",
+        channel=0,
+        channel_pos=2,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=1,
+        chunk_count=3,
+        final_flag=0x80,
+    )
+    steps = replay.build_replay_sequence(spec, walk=False)
+    assert len(steps[0].packets) > 1
+    assert all(len(packet) == spec.chunking.packet_len for packet in steps[0].packets)
+    assert steps[0].packets[-1][spec.chunking.channel_pos] == 0x80
+
+
+def test_replay_writer_rejects_unsupported_transport_before_writing():
+    spec = examples.no_checksum_identity()
+    spec.transport = "usb_control"
+    writer = replay.HidReplayWriter(spec, "unused")
+    with pytest.raises(RuntimeError, match="usb_control"):
+        writer.write(b"\x00")

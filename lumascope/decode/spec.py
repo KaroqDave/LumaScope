@@ -8,6 +8,7 @@ from .. import codec
 from ..model import (
     KIND_BRIGHTNESS,
     CaptureFrame,
+    ChunkingModel,
     Corpus,
     HeaderField,
     ProtocolSpec,
@@ -50,6 +51,26 @@ def _transport_from_frame(frame: CaptureFrame) -> str:
     return _TRANSPORT.get(frame.transfer, "hid_feature")
 
 
+def _chunking_from_frame(frame: CaptureFrame) -> ChunkingModel:
+    meta = frame.meta.get("chunking") if frame.meta else None
+    if not isinstance(meta, dict) or not meta.get("packet_len"):
+        return ChunkingModel(present=False)
+    return ChunkingModel(
+        present=True,
+        packet_len=int(meta.get("packet_len", 0)),
+        prefix=bytes(meta.get("prefix", [])),
+        channel=int(meta.get("channel", 0)),
+        channel_pos=int(meta.get("channel_pos", 0)),
+        channel_mask=int(meta.get("channel_mask", 0xFF)),
+        final_flag=int(meta.get("final_flag", 0)),
+        offset_pos=int(meta.get("offset_pos", 0)),
+        count_pos=int(meta.get("count_pos", 0)),
+        payload_start=int(meta.get("payload_start", 0)),
+        unit=int(meta.get("unit", 1)),
+        chunk_count=int(meta.get("chunk_count", 0)),
+    )
+
+
 def decode(
     corpus: Corpus,
     *,
@@ -69,6 +90,7 @@ def decode(
     f0 = color_frames[0].frame
     report_id = f0.report_id
     transport = _transport_from_frame(f0)
+    chunking = _chunking_from_frame(f0)
 
     # 1) Checksum — discover the column reproducible from the rest of the packet.
     cs = checksum_mod.detect(color_frames, length, has_report_id=report_id is not None)
@@ -107,6 +129,7 @@ def decode(
         leds=layout,
         brightness=brightness,
         checksum=cs,
+        chunking=chunking,
         vid=vid if vid is not None else corpus.vid,
         pid=pid if pid is not None else corpus.pid,
     )
