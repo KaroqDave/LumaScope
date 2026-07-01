@@ -4,7 +4,7 @@
     "_type": "doc",
     "_source": {
       "layers": {
-        "frame": { "frame.number": "1", "frame.len": "37" },
+        "frame": { "frame.number": "1", "frame.len": "37", "frame.time_epoch": "1700000000.000000000" },
         "usb": {
           "usb.src": "host",
           "usb.dst": "1.5.3",
@@ -27,7 +27,7 @@
     "_type": "doc",
     "_source": {
       "layers": {
-        "frame": { "frame.number": "2", "frame.len": "30" },
+        "frame": { "frame.number": "2", "frame.len": "30", "frame.time_epoch": "9999999999.0", "frame.time_relative": "0.008000000" },
         "usb": {
           "usb.src": "host",
           "usb.dst": "1.5.2",
