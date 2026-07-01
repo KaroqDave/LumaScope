@@ -111,6 +111,25 @@ lumascope inspect --frames cycle.jsonl        --vid 0x0b05 --pid 0x19af    # onl
 lumascope inspect --frames fixed_red.jsonl    --diff fixed_green.jsonl     # fixed color still in EC40 payload
 ```
 
+### Effect *speed* is a phase step, not a wire field
+
+Because the effect is streamed, **speed has no byte** — it is the rate the streamed colour
+advances. Capturing the rainbow at three speed-slider positions and measuring the timing
+(`lumascope cadence`, which reads per-frame timestamps) shows the mechanism cleanly:
+
+| slider | frame rate | cycle period | hue rate | hue advance per update |
+|---|---|---|---|---|
+| min  | 180 fps | 16.5 s | 22 °/s  | 2.3 ° |
+| mid  | 203 fps |  3.2 s | 113 °/s | 10.6 ° |
+| max  | 204 fps |  1.6 s | 222 °/s | 20.6 ° |
+
+Slow→fast the cycle period changes **10×** and the per-update hue step changes **~9×**, while the
+stream frame rate barely moves (**1.14×**). So Armoury Crate holds a fixed ~180–200 Hz refresh and
+advances the animation phase further each frame — speed is a host-side phase increment. For a
+consumer that host-streams the same effect, "speed" is therefore just its animation-timer rate;
+matching Armoury Crate's range means a cycle period of ~1.6 s (fast) to ~16.5 s (slow). There is no
+speed payload byte to encode.
+
 **Implication — and the limit of Armoury Crate as a reference.** Every effect on this controller is
 host-side animation over the *same* `EC 40` writer this doc specifies (and that LumaCore already
 implements and golden-tests). So Armoury Crate is a **direct-streaming implementation** and will

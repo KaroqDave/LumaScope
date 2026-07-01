@@ -315,6 +315,20 @@ def _cmd_inspect(args) -> int:
     return 0
 
 
+def _cmd_cadence(args) -> int:
+    from .capture.serialize import load_frames
+    from .decode.cadence import analyze_cadence, format_cadence
+
+    for path in args.frames:
+        frames = load_frames(path)
+        c = analyze_cadence(frames, channel=args.channel, vid=args.vid, pid=args.pid)
+        if c is None:
+            print(f"# {path}: no outbound streamed frames matched", file=sys.stderr)
+            continue
+        print(format_cadence(c, name=path))
+    return 0
+
+
 def _cmd_stub(phase: str):
     def run(args) -> int:
         print(f"`{args.command}` is not implemented yet (lands in {phase}).", file=sys.stderr)
@@ -406,6 +420,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_ins.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
     p_ins.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
     p_ins.set_defaults(func=_cmd_inspect)
+
+    p_cad = sub.add_parser("cadence", help="measure a streamed effect's timing (frame rate + colour-cycle period = speed)")
+    p_cad.add_argument("--frames", required=True, nargs="+", help="one or more frame JSONL files (compared side by side)")
+    p_cad.add_argument("--channel", type=int, default=None, help="reference channel to track (default: auto)")
+    p_cad.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
+    p_cad.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
+    p_cad.set_defaults(func=_cmd_cadence)
 
     p_replay = sub.add_parser("replay", help="replay a decoded spec to verify it on the device")
     p_replay.add_argument("--spec", default=None, help="path to a spec JSON file")
