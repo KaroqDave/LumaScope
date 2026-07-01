@@ -78,38 +78,53 @@ EC 40 80 64 14  ff0000 ...                 (chunk @ LED 100, bit7 = last)
 EC 40 84 00 02  ...                        (commit)
 ```
 
-## Effects are host-streamed — there is no native colored-effect command
+## Armoury Crate drives everything via `EC 40` — there is no native-effect command
 
-A second controlled capture set out to find the "effect" protocol (an `EC 35` mode-set +
-`EC 36` effect-color, by analogy with OpenRGB's mainboard path). **It found neither.** On an
-**addressable** header, *Breathing* and even *Static* are both driven entirely over the already-
-known `EC 40` direct-color path — Armoury Crate renders the animation **in software** and streams
-frames:
+Two controlled capture sets set out to find an "effect" protocol (an `EC 35` mode-set + `EC 36`
+effect-color, by analogy with OpenRGB's mainboard path). **Neither exists in Armoury Crate.**
+Across **seven** captures spanning every lighting mode the app offers — static, breathing,
+color-cycle, rainbow, on both fixed and addressable zones — the **only** ASUS color command class
+is `EC 40`. Armoury Crate renders every animation **in software** and streams frames:
 
-| capture (single-variable) | outbound command classes | what changes frame-to-frame |
+| capture (single-variable) | ASUS command classes | what changes frame-to-frame |
 |---|---|---|
-| `breathe_red`  | `EC 40` × **2432** | the **R** byte of every LED ramps `0→…→255→…→0`; G/B stay `00` |
-| `breathe_green`| `EC 40` × 2399     | the **G** byte ramps; R/B stay `00`  → **RGB order** re-confirmed |
-| `static_red`   | `EC 40` × **171**  | nothing — a constant `ff0000` buffer, re-asserted periodically |
+| `static_red`   | `EC 40` × 171   | nothing — a constant `ff0000` buffer, re-asserted periodically |
+| `breathe_red`  | `EC 40` × 2432  | the **R** byte of every LED ramps `0→…→255→…→0`; G/B stay `00` |
+| `breathe_green`| `EC 40` × 2545  | the **G** byte ramps; R/B stay `00`  → **RGB order** re-confirmed |
+| `cycle`        | `EC 40` × 4119  | the whole payload cycles through hues, frame by frame |
+| `rainbow`      | `EC 40` × 4367  | a spatial gradient is streamed (e.g. LED0 `97 00 ff` → LED1 `f6 00 ff`) |
+| `fixed_red`    | `EC 40` × 114   | constant `ff0000` on channels 0/1/2 (+ 2-LED channel 4) |
+| `fixed_green`  | `EC 40` × 114   | constant `00ff00`  → `fixed_red`↔`fixed_green` diff = R col ↔ G col |
 
-No `EC 35` and no `EC 36` packet appears in any capture. *Static* vs *Breathing* differ **only in
-the payload values streamed**, never in a mode byte. The recovered breathing brightness envelope is
-a 42-step gamma curve: `0,2,4,6,10,14,19,24,31,37,45,52,61,70,78,88,98,107,118,127,128,137,…,251,253,255`.
+A raw scan of all seven files for `EC 35 / EC 36 / EC 30 / EC B0 / EC 52` returns **zero** matches.
+*Static* vs *Breathing* vs *Cycle* vs *Rainbow* differ **only in the payload values streamed**,
+never in a mode byte. (The recovered breathing envelope is a 42-step gamma curve:
+`0,2,4,6,10,14,19,24,31,37,45,52,61,70,78,88,98,107,118,127,128,…,251,253,255`.) Even the "fixed"
+zone reassembles to the same `EC 40` channels — this controller exposes no separate fixed-header
+color path under Armoury Crate.
 
-This was localized with the `inspect` command (the rigorous "diff two single-variable captures"):
+Localized with the `inspect` command (the rigorous "diff two single-variable captures"):
 
 ```bash
-lumascope inspect --frames breathe_red.jsonl --vid 0x0b05 --pid 0x19af          # only EC40 present
-lumascope inspect --frames breathe_red.jsonl --diff breathe_green.jsonl         # R cols ↔ G cols
-lumascope inspect --frames static_red.jsonl  --diff breathe_red.jsonl           # steady vs ramped payload
+lumascope inspect --frames breathe_red.jsonl --diff breathe_green.jsonl   # R cols ↔ G cols (RGB)
+lumascope inspect --frames cycle.jsonl        --vid 0x0b05 --pid 0x19af    # only EC40, no EC35
+lumascope inspect --frames fixed_red.jsonl    --diff fixed_green.jsonl     # fixed color still in EC40 payload
 ```
 
-**Implication.** Colored breathing on these addressable channels is not a missing/native protocol —
-it is host-side animation over the *same* `EC 40` writer this doc already specifies (and that
-LumaCore already implements and golden-tests). The only "unlock" needed is a streaming animation
-loop, which is a product/scope choice, not a reverse-engineering gap. **Still uncaptured** (a
-different experiment, on a *fixed* RGB header): whether fixed headers use `EC 35`/`EC 36`, and how
-the autonomous hardware effects (color-cycle `0x04`, rainbow `0x05`) are commanded.
+**Implication — and the limit of Armoury Crate as a reference.** Every effect on this controller is
+host-side animation over the *same* `EC 40` writer this doc specifies (and that LumaCore already
+implements and golden-tests). So Armoury Crate is a **direct-streaming implementation** and will
+never exercise an `EC 35`/`EC 36` path, regardless of which mode is chosen — capturing it further
+cannot confirm or deny that path.
+
+This does **not** mean the controller lacks `EC 35`/`EC 36`. OpenRGB's AuraUSB controller (also
+owned-hardware-derived) *does* use `EC 35` (mode), `EC 36` (effect color), and the `EC B0`/`EC 30`
+config-table probe — for **hardware-persistent** effects that keep running after the app closes, a
+capability Armoury Crate simply doesn't use. Validating that path on owned hardware therefore
+requires a *different* reference than Armoury Crate: a capture of **OpenRGB** driving the board, or a
+guarded write test from the consuming app. What these captures *do* establish is that the full
+Armoury Crate feature set — all effects, fixed and addressable — is reproducible over the
+already-validated `EC 40` streaming path alone.
 
 ## Note for LumaCore / LumaScope
 
