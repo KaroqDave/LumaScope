@@ -8,12 +8,12 @@ eyeball-diff 64-byte hex dumps in a spreadsheet. Every prior project (OpenRGB, O
 SignalRGB) documents that exact manual loop. LumaScope automates it:
 
 ```
- drive the vendor app  →  capture device traffic  →  auto-diff into a protocol spec  →  emit
+ drive the vendor app  ->  capture device traffic  ->  auto-diff into a protocol spec  ->  emit
     (stimulus)              (Frida / USBPcap)              (decode)             (JSON + C++ skeleton)
 ```
 
-The harness is disposable research tooling; its **output** — a machine-readable protocol spec and
-an OpenRGB-style C++ `RGBController` skeleton — is the deliverable. It was built to feed the
+The harness is disposable research tooling; its **output** - a machine-readable protocol spec and
+an OpenRGB-style C++ `RGBController` skeleton - is the deliverable. It was built to feed the
 [**LumaCore**](https://github.com/KaroqDave/LumaCore) RGB product, but nothing ties it to one
 consumer.
 
@@ -22,29 +22,29 @@ consumer.
 LumaScope reverse-engineered an **ASUS Aura motherboard controller** (USB `VID_0B05 PID_19AF`)
 end-to-end on a live machine:
 
-1. **Mapped the stack** with the Frida backend: Armoury Crate GUI → `LightingService` (JSON-RPC
-   over a named pipe) → `ArmouryCrate.Service` (custom kernel-driver IOCTLs).
-2. **Captured the wire bytes** with the USBPcap fallback — necessary because the colour buffer is
+1. **Mapped the stack** with the Frida backend: Armoury Crate GUI -> `LightingService` (JSON-RPC
+   over a named pipe) -> `ArmouryCrate.Service` (custom kernel-driver IOCTLs).
+2. **Captured the wire bytes** with the USBPcap fallback - necessary because the colour buffer is
    passed *by reference* through a kernel driver, invisible to in-process hooks (exactly the case
    the bus-sniffing fallback exists for).
 3. **Decoded** the `EC 40` chunked direct-colour protocol: report `0xEC`, command `0x40`, 3
    channels of up to 120 LEDs, RGB order, 20 LEDs/packet, apply-flag on the final chunk.
-4. **Characterised the effects** with `inspect` (single-variable command-class diffs): every mode —
-   static, breathing, colour-cycle, rainbow, fixed *and* addressable — is host-streamed over that
+4. **Characterised the effects** with `inspect` (single-variable command-class diffs): every mode -
+   static, breathing, colour-cycle, rainbow, fixed *and* addressable - is host-streamed over that
    same `EC 40` path. Armoury Crate uses **no** native effect command (`EC 35`/`EC 36` never appear).
 5. **Measured effect speed** with `cadence` (per-frame timing): speed is not a wire field but a
-   host-side phase rate — the rainbow's cycle period spans ~1.6 s (fast) to ~16.5 s (slow) at a
-   fixed ~180–200 Hz refresh.
+   host-side phase rate - the rainbow's cycle period spans ~1.6 s (fast) to ~16.5 s (slow) at a
+   fixed ~180-200 Hz refresh.
 
-A controlled single-colour capture confirmed **RGB** order, and the result — written up in
-[docs/asus-aura-pid19af-protocol.md](docs/asus-aura-pid19af-protocol.md) — matches LumaCore's
+A controlled single-colour capture confirmed **RGB** order, and the result - written up in
+[docs/asus-aura-pid19af-protocol.md](docs/asus-aura-pid19af-protocol.md) - matches LumaCore's
 existing encoder, locked by a passing golden test. That doc is the best worked example of the
 whole loop, and the methodological punchline: because Armoury Crate streams everything, an Aura
 capture cannot reach the `EC 35`/`EC 36` path (that needs an OpenRGB capture or a guarded write).
 
 ## Install
 
-The **decode + emit core is pure Python stdlib** — no install needed to run the engine or its
+The **decode + emit core is pure Python stdlib** - no install needed to run the engine or its
 tests. Capture and stimulus backends are optional extras (native wheels); install only what you
 use.
 
@@ -55,6 +55,7 @@ pip install -e .[dev] && pytest         # run the test suite
 
 pip install -e .[frida]                 # optional: Frida in-process capture (HID/WinUSB)
 pip install -e .[stimulus]              # optional: OpenRGB driver + GUI automation
+pip install -e .[usb]                   # optional: pyusb for guarded USB control replay
 # USBPcap capture additionally needs Wireshark (tshark) + USBPcap installed system-wide
 ```
 
@@ -69,25 +70,26 @@ Run `python -m lumascope.cli <command> --help` for options.
 |---|---|---|
 | `doctor` | report installed tools + which phases are runnable here | no |
 | `selftest` | prove the decoder recovers the built-in example specs | no |
-| `demo <example>` | full synth → decode → validate → C++ pipeline on one example | no |
-| `decode` | decode a saved capture corpus → protocol spec (+ optional C++) | no |
+| `demo <example>` | full synth -> decode -> validate -> C++ pipeline on one example | no |
+| `decode` | decode a saved capture corpus -> protocol spec (+ optional C++) | no |
 | `reassemble` | reassemble a chunked/streamed capture into per-channel buffers | no |
 | `inspect` | group a capture by command class, or diff two single-variable captures to localize a changed byte | no |
-| `cadence` | measure a streamed effect's timing — frame rate + colour-cycle period (i.e. its *speed*) | no |
-| `emit` | render a protocol spec → JSON or C++ skeleton | no |
-| `capture` | record device writes — Frida hook (`--backend frida`) or USBPcap sniff (`--backend usbpcap`) | yes |
+| `cadence` | measure a streamed effect's timing - frame rate + colour-cycle period (i.e. its *speed*) | no |
+| `analyze` | one-shot inspect + chunk reassembly + cadence report for a saved capture | no |
+| `emit` | render a protocol spec -> JSON or C++ skeleton | no |
+| `capture` | record device writes - Frida hook (`--backend frida`) or USBPcap sniff (`--backend usbpcap`) | yes |
 | `sweep` | drive a stimulus through the matrix, capture, pair into a labeled corpus, optionally decode + emit | yes |
 | `replay` | replay a decoded spec to the device to verify it (dry-run by default, safety-gated) | yes |
 
 ## Workflows
 
-### No hardware — prove the engine
+### No hardware - prove the engine
 ```bash
 python -m lumascope.cli selftest        # recover interleaved/planar/gamma/CRC example specs
-python -m lumascope.cli demo gamma      # synth → decode → validate → C++ for one example
+python -m lumascope.cli demo gamma      # synth -> decode -> validate -> C++ for one example
 ```
 
-### Real device — reverse a protocol (Windows)
+### Real device - reverse a protocol (Windows)
 See [docs/asus-aura-pid19af-protocol.md](docs/asus-aura-pid19af-protocol.md) for a full worked
 example. The shape of the loop:
 
@@ -102,7 +104,7 @@ python -m lumascope.cli capture --backend usbpcap --interface \\.\USBPcap1 --dur
 
 # 3. inspect the structure; for streamed/chunked protocols, reassemble per-channel buffers:
 python -m lumascope.cli reassemble --frames caps.jsonl --triplets
-#    for command/mode protocols, group by command class — then change ONE thing and diff to
+#    for command/mode protocols, group by command class - then change ONE thing and diff to
 #    localize the byte that carries it (the rigorous version of eyeballing two hex dumps):
 python -m lumascope.cli inspect --frames caps.jsonl --vid 0x0b05 --pid 0x19af
 python -m lumascope.cli inspect --frames red.jsonl --diff green.jsonl --vid 0x0b05 --pid 0x19af
@@ -111,7 +113,7 @@ python -m lumascope.cli inspect --frames red.jsonl --diff green.jsonl --vid 0x0b
 python -m lumascope.cli sweep --led-count <N> --driver manual --attach <VendorService> \
     --out corpus.json --decode --emit-cpp Device.cpp
 
-# 5. (optional) verify the decoded spec by replaying it — vendor app CLOSED first:
+# 5. (optional) verify the decoded spec by replaying it - vendor app CLOSED first:
 python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>"          # dry-run
 python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>" --write --yes
 ```
@@ -119,29 +121,29 @@ python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>" --wr
 ## Architecture
 
 ```
-                 orchestrate.py  (drive → capture window → pair → Corpus)
+                 orchestrate.py  (drive -> capture window -> pair -> Corpus)
                  ┌──────────────┬──────────────┬──────────────┐
             STIMULUS         CAPTURE         DECODE          EMIT
-       matrix / manual /  frida_backend  chunked → diff   spec_json
+       matrix / manual /  frida_backend  chunked -> diff   spec_json
        openrgb + sync     usbpcap_backend  stride/checksum  openrgb_cpp
-                          → CaptureFrame   encoding/spec    (JSON + C++)
+                          -> CaptureFrame   encoding/spec    (JSON + C++)
 ```
 
-- **`model.py`** — the shared vocabulary every module speaks: `CaptureFrame`, `SweepStep`,
+- **`model.py`** - the shared vocabulary every module speaks: `CaptureFrame`, `SweepStep`,
   `Corpus`, `ProtocolSpec`.
-- **`codec.py`** — the single reference encoder (`spec + colors → wire bytes`), shared by the
+- **`codec.py`** - the single reference encoder (`spec + colors -> wire bytes`), shared by the
   synthetic generator, the decoder's validation round-trip, and mirrored by the C++ emitter.
-- **`capture/`** — `frida_backend` spawns/attaches a process and injects `agent.js` to hook
-  `WriteFile` / `DeviceIoControl` / `HidD_*` / `WinUsb_*` (with handle→VID:PID correlation and a
+- **`capture/`** - `frida_backend` spawns/attaches a process and injects `agent.js` to hook
+  `WriteFile` / `DeviceIoControl` / `HidD_*` / `WinUsb_*` (with handle->VID:PID correlation and a
   binary channel); `usbpcap_backend` parses `tshark -T json` from a USBPcap bus capture. Both emit
   a common `CaptureFrame`. `serialize` defines the on-disk frame/corpus JSON.
-- **`decode/`** — passes over a labeled `Corpus`: `chunked` reassembles streamed protocols first;
+- **`decode/`** - passes over a labeled `Corpus`: `chunked` reassembles streamed protocols first;
   `diff` localizes fields + recovers scaling; `stride` recovers layout/stride/channel-order;
   `checksum` recovers sum/xor/CRC; `encoding` finds brightness; `spec` assembles and validates by
   re-encoding every frame byte-for-byte.
-- **`stimulus/`** — `matrix` generates the one-thing-at-a-time sweep; `manual` (operator-guided)
+- **`stimulus/`** - `matrix` generates the one-thing-at-a-time sweep; `manual` (operator-guided)
   and `openrgb` drivers apply each step; `sync` windows the capture.
-- **`emit/`** — `spec_json` (canonical JSON) and `openrgb_cpp` (a drop-in `RGBController` skeleton).
+- **`emit/`** - `spec_json` (canonical JSON) and `openrgb_cpp` (a drop-in `RGBController` skeleton).
 
 ## Layout
 
@@ -177,7 +179,7 @@ push (`.github/workflows/tests.yml`).
 
 ## Safety
 
-Capture-only / passive by default — the tool never issues device writes during research, and
+Capture-only / passive by default - the tool never issues device writes during research, and
 **never auto-probes SMBus addresses** (blind SMBus access has bricked real boards: Gigabyte Z390,
 MSI Mystic Light). The `replay` command is the only writer: it is **dry-run by default**, a real
 write requires explicit `--write --yes`, and it must be run with the vendor app/service **closed**
@@ -185,6 +187,6 @@ write requires explicit `--write --yes`, and it must be run with the vendor app/
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Note that emitted C++ skeletons are modelled on OpenRGB's
+MIT - see [LICENSE](LICENSE). Note that emitted C++ skeletons are modelled on OpenRGB's
 `RGBController` shape; if you ship them inside a GPL project (e.g. LumaCore), that project's license
 governs the integrated result.

@@ -8,7 +8,7 @@ from lumascope import examples, synthetic
 from lumascope.capture.serialize import corpus_from_dict, corpus_to_dict
 from lumascope.emit import render_cpp, spec_from_dict, spec_to_dict
 from lumascope.emit.openrgb_cpp import _class_name
-from lumascope.model import ChunkingModel, LedLayout, ProtocolSpec, Scaling
+from lumascope.model import ChunkingModel, ChunkTarget, LedLayout, ProtocolSpec, Scaling
 
 
 @pytest.mark.parametrize("factory", examples.ALL, ids=[f.__name__ for f in examples.ALL])
@@ -50,6 +50,30 @@ def test_chunking_json_round_trips():
     assert again.chunking.channel == 2
     assert again.chunking.unit == 3
     assert again.chunking.chunk_count == 1
+
+
+def test_chunk_targets_json_round_trips():
+    spec = examples.no_checksum_identity()
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=8,
+        prefix=b"\xEC\x40",
+        channel_pos=2,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=3,
+        chunk_count=1,
+        final_flag=0x80,
+        targets=[
+            ChunkTarget(channel=0, led_count=6, name="header0"),
+            ChunkTarget(channel=4, led_count=2, payload_len=6, name="zone"),
+        ],
+    )
+    again = spec_from_dict(spec_to_dict(spec))
+    assert [t.channel for t in again.chunking.targets] == [0, 4]
+    assert again.chunking.targets[1].led_count == 2
+    assert again.chunking.targets[1].payload_len == 6
 
 
 def test_cpp_contains_recovered_constants():
@@ -128,9 +152,38 @@ def test_cpp_emits_chunked_send_loop():
     assert "for (size_t offset = 0; offset < buf.size(); offset += max_payload)" in cpp
 
 
-def test_cpp_unsupported_transport_throws_instead_of_hid_fallback():
+def test_cpp_emits_multi_target_chunked_send_loop():
+    spec = examples.no_checksum_identity()
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=14,
+        prefix=b"\xEC\x40",
+        channel_pos=2,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=3,
+        chunk_count=1,
+        final_flag=0x80,
+        targets=[
+            ChunkTarget(channel=0, led_count=6, payload_len=18),
+            ChunkTarget(channel=4, led_count=2, payload_len=6),
+        ],
+    )
+    cpp = render_cpp(spec)
+    assert "const ChunkTarget targets[]" in cpp
+    assert "{0x00, 6, 0, 18}" in cpp
+    assert "{0x04, 2, 0, 6}" in cpp
+    assert "SendPacket(buf, target.channel)" in cpp
+    assert "void SendPacket(std::vector<uint8_t>& buf, uint8_t channel)" in cpp
+    assert "pkt[CHUNK_CHANNEL_POS] = (uint8_t)(channel | (last ? CHUNK_FINAL_FLAG : 0));" in cpp
+
+
+def test_cpp_usb_control_uses_libusb_instead_of_hid_fallback():
     spec = examples.no_checksum_identity()
     spec.transport = "usb_control"
     cpp = render_cpp(spec)
-    assert "throw std::runtime_error(\"usb_control replay is not implemented\")" in cpp
-    assert "libusb_control_transfer" not in cpp
+    assert "#include <libusb-1.0/libusb.h>" in cpp
+    assert "libusb_control_transfer" in cpp
+    assert "CONTROL_BM_REQUEST_TYPE = 0x21" in cpp
+    assert "hid_write" not in cpp

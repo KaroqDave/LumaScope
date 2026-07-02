@@ -38,7 +38,11 @@ def build_replay_sequence(spec: ProtocolSpec, *, brightness: int = 255, walk: bo
     All values are 0 or 255, so the pattern is unambiguous to the eye and independent of the
     recovered scaling curve.
     """
-    n = max(spec.leds.count, 1)
+    target_count = max(
+        (t.color_start + t.led_count for t in spec.chunking.targets),
+        default=spec.leds.count,
+    )
+    n = max(target_count, 1)
     patterns: list[tuple[str, list[Color]]] = [
         ("all red", [(255, 0, 0)] * n),
         ("all green", [(0, 255, 0)] * n),
@@ -118,6 +122,58 @@ class HidReplayWriter:
             self._h = None
 
 
+class UsbControlReplayWriter:
+    """Write replay packets with USB control OUT transfers via optional pyusb."""
+
+    def __init__(self, spec: ProtocolSpec, usb_core=None) -> None:
+        self.spec = spec
+        self._usb_core = usb_core
+        self._dev = None
+
+    def open(self) -> None:
+        if self.spec.vid is None or self.spec.pid is None:
+            raise RuntimeError("usb_control replay needs VID/PID in the spec")
+        core = self._usb_core
+        if core is None:
+            try:
+                import usb.core as core  # type: ignore[no-redef]
+            except ImportError as exc:
+                raise RuntimeError("usb_control replay needs pyusb (`pip install pyusb`)") from exc
+        dev = core.find(idVendor=self.spec.vid, idProduct=self.spec.pid)
+        if dev is None:
+            raise OSError(f"could not find USB device {self.spec.vid:#06x}:{self.spec.pid:#06x}")
+        self._dev = dev
+
+    def _w_value(self, data: bytes) -> int:
+        if self.spec.control.w_value is not None:
+            return self.spec.control.w_value
+        report_id = self.spec.report_id if self.spec.report_id is not None else (data[0] if data else 0)
+        return (0x03 << 8) | (report_id & 0xFF)
+
+    def write(self, data: bytes) -> None:
+        if self._dev is None:
+            raise RuntimeError("usb_control writer is not open")
+        sent = self._dev.ctrl_transfer(
+            self.spec.control.bm_request_type,
+            self.spec.control.b_request,
+            self._w_value(data),
+            self.spec.control.w_index,
+            data,
+            timeout=self.spec.control.timeout_ms,
+        )
+        if sent is not None and int(sent) != len(data):
+            raise OSError(f"short USB control write ({sent}/{len(data)} bytes)")
+
+    def close(self) -> None:
+        self._dev = None
+
+
+def _writer_for(spec: ProtocolSpec, device_path: Optional[str]):
+    if spec.transport == "usb_control":
+        return UsbControlReplayWriter(spec)
+    return HidReplayWriter(spec, device_path or "")
+
+
 def write_sequence(
     spec: ProtocolSpec,
     steps: list[ReplayStep],
@@ -142,10 +198,10 @@ def write_sequence(
         out("Re-run with --write --yes (vendor app CLOSED) to send these to the device.")
         return False
 
-    if not device_path:
+    if not device_path and spec.transport != "usb_control":
         raise RuntimeError("replay needs a device path (from the capture corpus or --device-path)")
 
-    writer = HidReplayWriter(spec, device_path)
+    writer = _writer_for(spec, device_path)
     writer.open()
     out(f"writing {len(steps)} replay packet(s) to {device_path}")
     try:

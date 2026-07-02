@@ -17,12 +17,13 @@ frida = ["frida>=16", "frida-tools>=12"]
 stimulus = ["pywinauto>=0.6.8", "openrgb-python>=0.3", "requests>=2.31"]
 image = ["pyautogui>=0.9.54", "opencv-python>=4.9"]
 checksum = ["crcbeagle>=1.0"]
+usb = ["pyusb>=1.2"]
 dev = ["pytest>=8"]
 all = [
     "frida>=16", "frida-tools>=12",
     "pywinauto>=0.6.8", "openrgb-python>=0.3", "requests>=2.31",
     "pyautogui>=0.9.54", "opencv-python>=4.9",
-    "crcbeagle>=1.0", "pytest>=8",
+    "crcbeagle>=1.0", "pyusb>=1.2", "pytest>=8",
 ]
 
 [project.scripts]
