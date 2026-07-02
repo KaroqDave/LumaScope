@@ -21,13 +21,23 @@ def _class_name(name: str) -> str:
     return "".join(p[:1].upper() + p[1:] for p in parts) + "Controller"
 
 
-def _led_offset_expr(spec: ProtocolSpec, wire_pos: int) -> str:
+def _led_offset_expr(spec: ProtocolSpec, wire_pos: int, *, count_expr: str = "LED_COUNT") -> str:
     le = spec.leds
     if le.explicit_offsets is not None:
         return f"LED_OFFSETS[i][{wire_pos}]"
     if le.layout == "planar":
-        return f"{le.base_offset} + {wire_pos}*LED_COUNT + i"
+        return f"{le.base_offset} + {wire_pos}*{count_expr} + i"
     return f"{le.base_offset} + i*STRIDE + {wire_pos}"
+
+
+def _pack_block(spec: ProtocolSpec, *, color_expr: str = "colors[i]", count_expr: str = "LED_COUNT") -> str:
+    lines = []
+    for wire_pos, ch in enumerate(spec.leds.channel_order):
+        lines.append(
+            f"        buf[{_led_offset_expr(spec, wire_pos, count_expr=count_expr)}] = "
+            f"scale(RGBGet{ch}Value({color_expr}));"
+        )
+    return "\n".join(lines)
 
 
 def _scale_body(spec: ProtocolSpec) -> str:
@@ -50,6 +60,18 @@ def _explicit_offset_table(spec: ProtocolSpec) -> str:
         "            {" + ", ".join(str(v) for v in row) + "}" for row in offsets
     )
     return f"        static const int LED_OFFSETS[LED_COUNT][3] = {{\n{rows}\n        }};\n"
+
+
+def _logical_payload_len(spec: ProtocolSpec, led_count: int) -> int:
+    le = spec.leds
+    if le.explicit_offsets is not None:
+        rows = le.explicit_offsets[:led_count]
+        return max(max(row) for row in rows) + 1 if rows else 0
+    if le.layout == "planar":
+        return le.base_offset + len(le.channel_order) * led_count
+    if led_count <= 0:
+        return le.base_offset
+    return le.base_offset + (led_count - 1) * le.stride + len(le.channel_order)
 
 
 def _reflect_helpers(width: int, refin: bool, refout: bool) -> str:
@@ -173,7 +195,14 @@ def _raw_send_call(spec: ProtocolSpec, var: str, *, indent: str = "    ") -> str
     if spec.transport in ("hid_output", "hid_interrupt"):
         return f"{indent}hid_write(dev, {var}.data(), {var}.size());"
     if spec.transport == "usb_control":
-        return f'{indent}throw std::runtime_error("usb_control replay is not implemented");'
+        return (
+            f"{indent}{{ uint16_t wValue = CONTROL_W_VALUE >= 0 ? (uint16_t)CONTROL_W_VALUE "
+            f": (uint16_t)(0x0300 | {var}[0]);\n"
+            f"{indent}  int sent = libusb_control_transfer(dev, CONTROL_BM_REQUEST_TYPE, "
+            f"CONTROL_B_REQUEST, wValue, CONTROL_W_INDEX,\n"
+            f"{indent}      (unsigned char*){var}.data(), (uint16_t){var}.size(), CONTROL_TIMEOUT_MS);\n"
+            f"{indent}  if (sent != (int){var}.size()) throw std::runtime_error(\"usb_control write failed\"); }}"
+        )
     return f'{indent}throw std::runtime_error("SMBus replay is not implemented");'
 
 
@@ -182,6 +211,7 @@ def _send_packet_body(spec: ProtocolSpec) -> str:
     if not ch.present:
         return _raw_send_call(spec, "buf")
 
+    channel_expr = "channel" if ch.targets else "CHUNK_CHANNEL"
     capacity = ch.packet_len - ch.payload_start
     capacity_payload = capacity - (capacity % ch.unit) if ch.unit else 0
     max_payload = min(ch.chunk_count * ch.unit if ch.chunk_count else capacity_payload, capacity_payload)
@@ -196,7 +226,7 @@ def _send_packet_body(spec: ProtocolSpec) -> str:
         const bool last = (offset + payload_len) >= buf.size();
         std::vector<uint8_t> pkt(CHUNK_PACKET_LEN, 0x00);
 {prefix_lines}
-        pkt[CHUNK_CHANNEL_POS] = (uint8_t)(CHUNK_CHANNEL | (last ? CHUNK_FINAL_FLAG : 0));
+        pkt[CHUNK_CHANNEL_POS] = (uint8_t)({channel_expr} | (last ? CHUNK_FINAL_FLAG : 0));
         pkt[CHUNK_OFFSET_POS] = (uint8_t)(offset / CHUNK_UNIT);
         pkt[CHUNK_COUNT_POS] = (uint8_t)(payload_len / CHUNK_UNIT);
         for (size_t j = 0; j < payload_len; j++) pkt[CHUNK_PAYLOAD_START + j] = buf[offset + j];
@@ -219,14 +249,7 @@ def render_cpp(spec: ProtocolSpec) -> str:
         f"    buf[{o}] = 0x{v:02X};\n" for o, v in spec.header.constant_bytes
     ) or "    // (no fixed header bytes)\n"
 
-    # per-LED packing assignments, in wire order
-    pack_lines = []
-    for wire_pos, ch in enumerate(le.channel_order):
-        pack_lines.append(
-            f"        buf[{_led_offset_expr(spec, wire_pos)}] = "
-            f"scale(RGBGet{ch}Value(colors[i]));"
-        )
-    pack_block = "\n".join(pack_lines)
+    pack_block = _pack_block(spec)
     offset_table = _explicit_offset_table(spec)
 
     if spec.brightness.present and spec.brightness.offset is not None:
@@ -241,6 +264,8 @@ def render_cpp(spec: ProtocolSpec) -> str:
     vid = f"0x{spec.vid:04X}" if spec.vid is not None else "0x0000"
     pid = f"0x{spec.pid:04X}" if spec.pid is not None else "0x0000"
     rid = f"0x{spec.report_id:02X}" if spec.report_id is not None else "0x00"
+    include = "#include <libusb-1.0/libusb.h>" if spec.transport == "usb_control" else "#include <hidapi.h>"
+    device_type = "libusb_device_handle*" if spec.transport == "usb_control" else "hid_device*"
 
     summary = (
         f"transport={spec.transport} vid={vid} pid={pid} packet_len={spec.packet_len} "
@@ -262,7 +287,22 @@ def render_cpp(spec: ProtocolSpec) -> str:
             f"    static constexpr int      CHUNK_UNIT          = {ch.unit};\n"
             f"    static constexpr int      CHUNK_COUNT         = {ch.chunk_count};\n"
         )
+    control_constants = ""
+    if spec.transport == "usb_control":
+        w_value = spec.control.w_value if spec.control.w_value is not None else -1
+        control_constants = (
+            f"    static constexpr uint8_t  CONTROL_BM_REQUEST_TYPE = 0x{spec.control.bm_request_type:02X};\n"
+            f"    static constexpr uint8_t  CONTROL_B_REQUEST      = 0x{spec.control.b_request:02X};\n"
+            f"    static constexpr int      CONTROL_W_VALUE        = {w_value};\n"
+            f"    static constexpr uint16_t CONTROL_W_INDEX        = {spec.control.w_index};\n"
+            f"    static constexpr unsigned int CONTROL_TIMEOUT_MS  = {spec.control.timeout_ms};\n"
+        )
     send_body = _send_packet_body(spec)
+    update_body = _update_body(spec, report_line, header_lines, offset_table, pack_block, bright_line, cs_apply)
+    send_signature = (
+        "    void SendPacket(std::vector<uint8_t>& buf, uint8_t channel)" if ch.present and ch.targets
+        else "    void SendPacket(std::vector<uint8_t>& buf)"
+    )
 
     return f"""// ---------------------------------------------------------------------------
 // {cls}  --  generated by LumaScope
@@ -271,7 +311,7 @@ def render_cpp(spec: ProtocolSpec) -> str:
 // Drop-in skeleton for a LumaCore device module. Fill in device discovery and modes;
 // the packet packing below is the protocol LumaScope recovered and validated.
 // ---------------------------------------------------------------------------
-#include <hidapi.h>
+{include}
 #include <algorithm>
 #include <vector>
 #include <cstdint>
@@ -294,21 +334,16 @@ public:
     static constexpr int      STRIDE     = {le.stride};
     static constexpr int      PACKET_LEN = {spec.packet_len};
 {chunk_constants}
+{control_constants}
 
-    explicit {cls}(hid_device* dev) : dev(dev) {{}}
+    explicit {cls}({device_type} dev) : dev(dev) {{}}
 
     void UpdateLEDs(const std::vector<RGBColor>& colors, uint8_t brightness = 255) {{
-        std::vector<uint8_t> buf(PACKET_LEN, 0x00);
-{report_line}{header_lines}
-{offset_table}
-        for (int i = 0; i < LED_COUNT && i < (int)colors.size(); i++) {{
-{pack_block}
-        }}
-{bright_line}{cs_apply}        SendPacket(buf);
+{update_body}
     }}
 
 private:
-    hid_device* dev;
+    {device_type} dev;
 
     static uint8_t clamp8(int v) {{
         return (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
@@ -320,8 +355,52 @@ private:
 
     {cs_defs.rstrip()}
 
-    void SendPacket(std::vector<uint8_t>& buf) {{
+{send_signature} {{
 {send_body}
     }}
 }};
 """
+
+
+def _update_body(
+    spec: ProtocolSpec,
+    report_line: str,
+    header_lines: str,
+    offset_table: str,
+    pack_block: str,
+    bright_line: str,
+    cs_apply: str,
+) -> str:
+    if not spec.chunking.targets:
+        return f"""        std::vector<uint8_t> buf(PACKET_LEN, 0x00);
+{report_line}{header_lines}
+{offset_table}
+        for (int i = 0; i < LED_COUNT && i < (int)colors.size(); i++) {{
+{pack_block}
+        }}
+{bright_line}{cs_apply}        SendPacket(buf);"""
+
+    targets = ", ".join(
+        "{"
+        f"0x{t.channel:02X}, {t.led_count}, {t.color_start}, "
+        f"{t.payload_len if t.payload_len is not None else _logical_payload_len(spec, t.led_count)}"
+        "}"
+        for t in spec.chunking.targets
+    )
+    target_pack = _pack_block(spec, color_expr="color", count_expr="target.led_count")
+    return f"""        struct ChunkTarget {{
+            uint8_t channel;
+            int led_count;
+            int color_start;
+            int payload_len;
+        }};
+        const ChunkTarget targets[] = {{{targets}}};
+        for (const ChunkTarget& target : targets) {{
+            std::vector<uint8_t> buf(target.payload_len, 0x00);
+{header_lines}
+            for (int i = 0; i < target.led_count && (target.color_start + i) < (int)colors.size(); i++) {{
+                RGBColor color = colors[target.color_start + i];
+{target_pack}
+            }}
+{bright_line}{cs_apply}            SendPacket(buf, target.channel);
+        }}"""

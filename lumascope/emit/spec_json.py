@@ -13,6 +13,8 @@ from ..model import (
     BrightnessField,
     ChecksumModel,
     ChunkingModel,
+    ChunkTarget,
+    ControlTransfer,
     HeaderField,
     LedLayout,
     ProtocolSpec,
@@ -59,6 +61,13 @@ def spec_to_dict(s: ProtocolSpec) -> dict[str, Any]:
             "range": list(s.checksum.range) if s.checksum.range else None,
             "params": s.checksum.params,
         },
+        "control": {
+            "bm_request_type": s.control.bm_request_type,
+            "b_request": s.control.b_request,
+            "w_value": s.control.w_value,
+            "w_index": s.control.w_index,
+            "timeout_ms": s.control.timeout_ms,
+        },
         "chunking": {
             "present": s.chunking.present,
             "packet_len": s.chunking.packet_len,
@@ -72,6 +81,16 @@ def spec_to_dict(s: ProtocolSpec) -> dict[str, Any]:
             "payload_start": s.chunking.payload_start,
             "unit": s.chunking.unit,
             "chunk_count": s.chunking.chunk_count,
+            "targets": [
+                {
+                    "channel": t.channel,
+                    "led_count": t.led_count,
+                    "color_start": t.color_start,
+                    "payload_len": t.payload_len,
+                    "name": t.name,
+                }
+                for t in s.chunking.targets
+            ],
         },
         "notes": s.notes,
     }
@@ -83,6 +102,7 @@ def spec_from_dict(d: dict[str, Any]) -> ProtocolSpec:
     sc = le.get("scaling", {})
     br = d.get("brightness", {})
     cs = d.get("checksum", {})
+    ctl = d.get("control", {})
     ch = d.get("chunking", {})
     return ProtocolSpec(
         name=d.get("name", "unknown"),
@@ -124,6 +144,13 @@ def spec_from_dict(d: dict[str, Any]) -> ProtocolSpec:
             range=tuple(cs["range"]) if cs.get("range") else None,
             params=cs.get("params", {}),
         ),
+        control=ControlTransfer(
+            bm_request_type=ctl.get("bm_request_type", 0x21),
+            b_request=ctl.get("b_request", 0x09),
+            w_value=ctl.get("w_value"),
+            w_index=ctl.get("w_index", 0),
+            timeout_ms=ctl.get("timeout_ms", 1000),
+        ),
         chunking=ChunkingModel(
             present=ch.get("present", False),
             packet_len=ch.get("packet_len", 0),
@@ -137,6 +164,16 @@ def spec_from_dict(d: dict[str, Any]) -> ProtocolSpec:
             payload_start=ch.get("payload_start", 0),
             unit=ch.get("unit", 1),
             chunk_count=ch.get("chunk_count", 0),
+            targets=[
+                ChunkTarget(
+                    channel=t.get("channel", 0),
+                    led_count=t.get("led_count", 0),
+                    color_start=t.get("color_start", 0),
+                    payload_len=t.get("payload_len"),
+                    name=t.get("name", ""),
+                )
+                for t in ch.get("targets", [])
+            ],
         ),
         notes=d.get("notes", []),
     )

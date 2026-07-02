@@ -6,6 +6,7 @@
     lumascope emit        render a protocol spec -> JSON / C++ skeleton    (Phase 5)
     lumascope sweep       drive a device through the sweep matrix          (Phase 4)
     lumascope capture     run a capture backend                           (Phase 2/3)
+    lumascope analyze     inspect/reassemble/cadence report for a capture
     lumascope replay      replay a decoded spec to verify it              (Phase 4)
 """
 
@@ -329,6 +330,29 @@ def _cmd_cadence(args) -> int:
     return 0
 
 
+def _cmd_analyze(args) -> int:
+    from .analyze import analyze_frames, format_analysis
+    from .capture.serialize import load_frames
+
+    frames = load_frames(args.frames)
+    report = analyze_frames(
+        frames,
+        sig_len=args.sig_len,
+        direction=(None if args.direction == "any" else args.direction),
+        vid=args.vid,
+        pid=args.pid,
+        channel=args.channel,
+    )
+    text = format_analysis(report, name=args.frames)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        print(f"wrote analysis -> {args.out}", file=sys.stderr)
+    else:
+        print(text)
+    return 0
+
+
 def _cmd_stub(phase: str):
     def run(args) -> int:
         print(f"`{args.command}` is not implemented yet (lands in {phase}).", file=sys.stderr)
@@ -427,6 +451,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_cad.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
     p_cad.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
     p_cad.set_defaults(func=_cmd_cadence)
+
+    p_an = sub.add_parser("analyze", help="inspect/reassemble/cadence report for a frame capture")
+    p_an.add_argument("--frames", required=True, help="frame JSONL from `capture`")
+    p_an.add_argument("--out", default=None, help="write Markdown report here (else stdout)")
+    p_an.add_argument("--sig-len", type=int, default=2, dest="sig_len",
+                      help="how many leading bytes define a command class")
+    p_an.add_argument("--direction", choices=("out", "in", "any"), default="out",
+                      help="filter command grouping by transfer direction")
+    p_an.add_argument("--channel", type=int, default=None,
+                      help="cadence reference channel (default: auto)")
+    p_an.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
+    p_an.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
+    p_an.set_defaults(func=_cmd_analyze)
 
     p_replay = sub.add_parser("replay", help="replay a decoded spec to verify it on the device")
     p_replay.add_argument("--spec", default=None, help="path to a spec JSON file")

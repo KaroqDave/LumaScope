@@ -187,6 +187,33 @@ class ChecksumModel:
 
 
 @dataclass
+class ControlTransfer:
+    """USB control transfer setup for ``usb_control`` replay."""
+
+    bm_request_type: int = 0x21
+    b_request: int = 0x09
+    w_value: Optional[int] = None
+    w_index: int = 0
+    timeout_ms: int = 1000
+
+
+@dataclass
+class ChunkTarget:
+    """One logical LED buffer emitted through a chunked wire channel.
+
+    ``color_start`` lets one global color vector address several zones. When it is 0 for
+    every target, the same leading colors are mirrored to each target, which matches
+    many motherboard controllers whose headers share the same visual state.
+    """
+
+    channel: int
+    led_count: int
+    color_start: int = 0
+    payload_len: Optional[int] = None
+    name: str = ""
+
+
+@dataclass
 class ChunkingModel:
     """How a logical LED buffer is split into fixed-size wire chunks."""
 
@@ -202,6 +229,7 @@ class ChunkingModel:
     payload_start: int = 0
     unit: int = 1
     chunk_count: int = 0
+    targets: list[ChunkTarget] = field(default_factory=list)
 
 
 @dataclass
@@ -214,6 +242,7 @@ class ProtocolSpec:
     leds: LedLayout = field(default_factory=LedLayout)
     brightness: BrightnessField = field(default_factory=BrightnessField)
     checksum: ChecksumModel = field(default_factory=ChecksumModel)
+    control: ControlTransfer = field(default_factory=ControlTransfer)
     chunking: ChunkingModel = field(default_factory=ChunkingModel)
     vid: Optional[int] = None
     pid: Optional[int] = None

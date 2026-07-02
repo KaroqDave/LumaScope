@@ -13,9 +13,12 @@ so a spec that round-trips here is one that will round-trip in LumaCore.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .model import (
     BrightnessField,
     ChecksumModel,
+    ChunkTarget,
     Color,
     LedLayout,
     ProtocolSpec,
@@ -59,6 +62,18 @@ def led_channel_offset(layout: LedLayout, led: int, wire_pos: int) -> int:
     if layout.layout == "planar":
         return layout.base_offset + wire_pos * layout.count + led
     return layout.base_offset + led * layout.stride + wire_pos  # interleaved
+
+
+def logical_payload_len(layout: LedLayout, led_count: int | None = None) -> int:
+    """Minimum buffer length needed to hold ``led_count`` LEDs for ``layout``."""
+    count = layout.count if led_count is None else led_count
+    if count <= 0:
+        return layout.base_offset
+    if layout.explicit_offsets is not None:
+        return max(max(row) for row in layout.explicit_offsets[:count]) + 1
+    if layout.layout == "planar":
+        return layout.base_offset + len(layout.channel_order) * count
+    return layout.base_offset + (count - 1) * layout.stride + len(layout.channel_order)
 
 
 # --------------------------------------------------------------------------- #
@@ -201,10 +216,48 @@ def encode_packets(
     ch = spec.chunking
     if not ch.present:
         return [frame]
+    if ch.targets:
+        packets: list[bytes] = []
+        for target in ch.targets:
+            payload = encode_chunk_target_payload(
+                spec, target, colors, brightness=brightness,
+                command=command, mode_value=mode_value,
+            )
+            packets.extend(chunk_payload(spec, payload, channel=target.channel))
+        return packets
     return chunk_payload(spec, frame)
 
 
-def chunk_payload(spec: ProtocolSpec, payload: bytes) -> list[bytes]:
+def encode_chunk_target_payload(
+    spec: ProtocolSpec,
+    target: ChunkTarget,
+    colors: list[Color],
+    brightness: int = 255,
+    command: int | None = None,
+    mode_value: int | None = None,
+) -> bytes:
+    """Build the logical payload buffer for one chunk target."""
+    layout = replace(spec.leds, count=target.led_count)
+    if spec.leds.explicit_offsets is not None:
+        layout.explicit_offsets = spec.leds.explicit_offsets[:target.led_count]
+    payload_len = target.payload_len or logical_payload_len(layout, target.led_count)
+    sub_spec = replace(
+        spec,
+        report_id=None,
+        packet_len=payload_len,
+        leds=layout,
+        chunking=replace(spec.chunking, present=False, targets=[]),
+    )
+    return encode_frame(
+        sub_spec,
+        colors[target.color_start: target.color_start + target.led_count],
+        brightness=brightness,
+        command=command,
+        mode_value=mode_value,
+    )
+
+
+def chunk_payload(spec: ProtocolSpec, payload: bytes, *, channel: int | None = None) -> list[bytes]:
     """Split a logical payload buffer into recovered wire chunks."""
     ch = spec.chunking
     if not ch.present:
@@ -226,7 +279,7 @@ def chunk_payload(spec: ProtocolSpec, payload: bytes) -> list[bytes]:
         pkt = bytearray(ch.packet_len)
         pkt[: len(ch.prefix)] = ch.prefix
         last = offset + len(piece) >= len(payload)
-        pkt[ch.channel_pos] = (ch.channel | (ch.final_flag if last else 0)) & 0xFF
+        pkt[ch.channel_pos] = ((ch.channel if channel is None else channel) | (ch.final_flag if last else 0)) & 0xFF
         pkt[ch.offset_pos] = (offset // ch.unit) & 0xFF
         pkt[ch.count_pos] = (len(piece) // ch.unit) & 0xFF
         pkt[ch.payload_start: ch.payload_start + len(piece)] = piece

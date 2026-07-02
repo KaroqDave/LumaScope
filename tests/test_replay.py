@@ -8,7 +8,7 @@ import pytest
 
 from lumascope import examples, replay, synthetic
 from lumascope.decode import decode
-from lumascope.model import ChunkingModel
+from lumascope.model import ChunkingModel, ChunkTarget
 
 
 def test_decoded_spec_replays_identically_to_ground_truth():
@@ -59,6 +59,8 @@ def test_confirmed_write_requires_device_path():
 
 def test_chunked_replay_steps_expose_individual_packets():
     spec = examples.no_checksum_identity()
+    spec.header.constant_bytes = []
+    spec.leds.base_offset = 0
     spec.chunking = ChunkingModel(
         present=True,
         packet_len=8,
@@ -78,9 +80,72 @@ def test_chunked_replay_steps_expose_individual_packets():
     assert steps[0].packets[-1][spec.chunking.channel_pos] == 0x80
 
 
+def test_multi_target_chunked_replay_writes_each_channel():
+    spec = examples.no_checksum_identity()
+    spec.header.constant_bytes = []
+    spec.leds.base_offset = 0
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=14,
+        prefix=b"\xEC\x40",
+        channel_pos=2,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=3,
+        chunk_count=1,
+        final_flag=0x80,
+        targets=[
+            ChunkTarget(channel=0, led_count=2, payload_len=6),
+            ChunkTarget(channel=4, led_count=1, payload_len=3),
+        ],
+    )
+
+    step = replay.build_replay_sequence(spec, walk=False)[0]
+
+    assert [p[2] for p in step.packets] == [0x00, 0x80, 0x84]
+    assert [p[3:5] for p in step.packets] == [bytes([0, 1]), bytes([1, 1]), bytes([0, 1])]
+    assert step.packets[0][5:8] == bytes.fromhex("ff0000")
+    assert step.packets[1][5:8] == bytes.fromhex("ff0000")
+    assert step.packets[2][5:8] == bytes.fromhex("ff0000")
+
+
 def test_replay_writer_rejects_unsupported_transport_before_writing():
     spec = examples.no_checksum_identity()
-    spec.transport = "usb_control"
+    spec.transport = "smbus"
     writer = replay.HidReplayWriter(spec, "unused")
-    with pytest.raises(RuntimeError, match="usb_control"):
+    with pytest.raises(RuntimeError, match="smbus"):
         writer.write(b"\x00")
+
+
+def test_usb_control_writer_uses_pyusb_control_transfer():
+    class FakeDevice:
+        def __init__(self):
+            self.calls = []
+
+        def ctrl_transfer(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+            return len(args[4])
+
+    class FakeCore:
+        def __init__(self, dev):
+            self.dev = dev
+
+        def find(self, **kwargs):
+            assert kwargs == {"idVendor": 0x0B05, "idProduct": 0x19AF}
+            return self.dev
+
+    dev = FakeDevice()
+    spec = examples.no_checksum_identity()
+    spec.transport = "usb_control"
+    spec.vid = 0x0B05
+    spec.pid = 0x19AF
+    writer = replay.UsbControlReplayWriter(spec, usb_core=FakeCore(dev))
+
+    writer.open()
+    writer.write(bytes.fromhex("ec400000"))
+
+    args, kwargs = dev.calls[0]
+    assert args[:4] == (0x21, 0x09, 0x03EC, 0)
+    assert args[4] == bytes.fromhex("ec400000")
+    assert kwargs == {"timeout": 1000}
