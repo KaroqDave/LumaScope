@@ -28,3 +28,11 @@ Recent history uses concise Conventional Commit prefixes such as `feat:`, `fix:`
 ## Safety & Configuration Tips
 
 Replay is the only device-writing path. Keep it dry-run by default, require explicit confirmation for writes, and do not add blind probing behavior. Never auto-probe SMBus addresses. Optional native dependencies should stay behind extras so decode, emit, and tests remain portable.
+
+## Cursor Cloud specific instructions
+
+- Only `python3` is on PATH (there is no `python` alias). Use `python3 -m lumascope.cli ...` and `python3 -m pytest -q` — the standard commands above work if you prefix with `python3`.
+- `pip install -e .[dev]` installs console scripts (`lumascope`, `pytest`) to `~/.local/bin`, which is not on PATH; prefer module invocation (`python3 -m ...`) instead of the bare `lumascope`/`pytest` entry points.
+- The decode engine, `doctor`, `selftest`, `demo`, `emit`, and the bulk of the test suite are pure stdlib and run fully here. The 3 skipped tests are Windows/Frida capture tests that skip cleanly (no hardware/native wheels in this environment) — this is expected, not a failure.
+- There is no configured linter/formatter (no ruff/flake8/black); `python3 -m compileall -q lumascope tests` is the syntax/import sanity check.
+- This is a CLI-only harness with no long-running services, server, or GUI to start.
