@@ -4,7 +4,13 @@ Builds a synthetic chunked capture from known per-channel buffers, then checks t
 reassembly recovers them and that framing inference finds the header layout — the same shape
 the pass recovered from a real ASUS Aura USB capture.
 """
-from lumascope.decode.chunked import ChunkFraming, infer_framing, reassemble, reassemble_auto
+from lumascope.decode.chunked import (
+    ChunkFraming,
+    infer_framing,
+    reassemble,
+    reassemble_auto,
+    reassemble_capture,
+)
 from lumascope.model import CaptureFrame
 
 FRAMING = ChunkFraming(prefix=b"\xec\x40", channel_pos=2, channel_mask=0x7F,
@@ -100,3 +106,15 @@ def test_non_chunked_capture_returns_none():
     frames = [CaptureFrame(data=bytes([0xEC, 0x40, i, 0xAA, 0xBB]) + b"\x00" * 60, direction="out")
               for i in range(4)]
     assert infer_framing(frames) is None
+
+
+def test_reassemble_capture_honors_direction():
+    inbound = [
+        CaptureFrame(data=f.data, direction="in")
+        for f in build_chunks({0: bytes(range(30))}, chunk=10, flag=0)
+    ]
+
+    framing, channels = reassemble_capture(inbound, direction="in")
+    assert framing is not None
+    assert channels[0] == bytes(range(30))
+    assert reassemble_capture(inbound, direction="out") == (None, {})

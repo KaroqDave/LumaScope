@@ -58,6 +58,7 @@ def analyze_cadence(
     channel_mask: int = 0x7F,
     vid: Optional[int] = None,
     pid: Optional[int] = None,
+    direction: Optional[str] = "out",
 ) -> Optional[Cadence]:
     """Measure the cadence of the dominant streamed command class.
 
@@ -66,17 +67,26 @@ def analyze_cadence(
     RGB triplet is tracked through time to recover the hue rate. ``channel=None`` auto-picks the
     channel with the most first-chunk samples.
     """
-    out = [
+    matching = [
         f for f in frames
-        if f.direction == "out" and len(f.data) >= payload_offset + 3
+        if (direction is None or f.direction == direction)
+        and len(f.data) >= payload_offset + 3
         and (vid is None or f.vid is None or f.vid == vid)
         and (pid is None or f.pid is None or f.pid == pid)
     ]
-    if not out:
+    if not matching:
         return None
 
-    cmd = Counter((f.data[0], f.data[1]) for f in out).most_common(1)[0][0]
-    cls = [f for f in out if (f.data[0], f.data[1]) == cmd]
+    # Match the chunking pass's command-class key so different packet lengths carrying the
+    # same leading bytes cannot be mixed into one cadence measurement.
+    class_key = Counter(
+        (len(f.data), f.data[0], f.data[1]) for f in matching
+    ).most_common(1)[0][0]
+    cls = [
+        f for f in matching
+        if (len(f.data), f.data[0], f.data[1]) == class_key
+    ]
+    cmd = (class_key[1], class_key[2])
 
     ts = [f.timestamp_ns for f in cls]
     has_timing = any(ts) and max(ts) != min(ts)

@@ -68,3 +68,21 @@ def test_returns_none_without_outbound_frames():
     inbound = [CaptureFrame(data=bytes([0xEC, 0x40, 0, 0, 1, 9, 9, 9]) + b"\x00" * 57,
                             direction="in", timestamp_ns=1)]
     assert analyze_cadence(inbound) is None
+    assert analyze_cadence(inbound, direction="in") is not None
+
+
+def test_dominant_command_class_includes_packet_length():
+    streamed = build_cycle(steps=10)
+    decoys = [
+        CaptureFrame(
+            data=bytes([0xEC, 0x40, 0, 0, 1, 9, 9, 9]),
+            direction="out",
+            timestamp_ns=index + 1,
+        )
+        for index in range(5)
+    ]
+
+    cadence = analyze_cadence(streamed + decoys)
+
+    assert cadence is not None
+    assert cadence.frames == len(streamed)

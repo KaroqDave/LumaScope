@@ -144,19 +144,13 @@ class UsbControlReplayWriter:
             raise OSError(f"could not find USB device {self.spec.vid:#06x}:{self.spec.pid:#06x}")
         self._dev = dev
 
-    def _w_value(self, data: bytes) -> int:
-        if self.spec.control.w_value is not None:
-            return self.spec.control.w_value
-        report_id = self.spec.report_id if self.spec.report_id is not None else (data[0] if data else 0)
-        return (0x03 << 8) | (report_id & 0xFF)
-
     def write(self, data: bytes) -> None:
         if self._dev is None:
             raise RuntimeError("usb_control writer is not open")
         sent = self._dev.ctrl_transfer(
             self.spec.control.bm_request_type,
             self.spec.control.b_request,
-            self._w_value(data),
+            codec.usb_control_w_value(self.spec, data),
             self.spec.control.w_index,
             data,
             timeout=self.spec.control.timeout_ms,

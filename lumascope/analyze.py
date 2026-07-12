@@ -30,12 +30,26 @@ def analyze_frames(
 ) -> Analysis:
     """Run the standard first-pass analyses over a raw capture."""
     groups = ins.group_frames(frames, sig_len=sig_len, direction=direction, vid=vid, pid=pid)
-    framing, channels = reassemble_capture([
+    filtered = [
         f for f in frames
         if (vid is None or f.vid is None or f.vid == vid)
         and (pid is None or f.pid is None or f.pid == pid)
-    ])
-    cadence = analyze_cadence(frames, channel=channel, vid=vid, pid=pid)
+    ]
+    framing, channels = reassemble_capture(filtered, direction=direction)
+    cadence_kwargs = {
+        "channel": channel,
+        "vid": vid,
+        "pid": pid,
+        "direction": direction,
+    }
+    if framing is not None:
+        cadence_kwargs.update({
+            "channel_pos": framing.channel_pos,
+            "offset_pos": framing.offset_pos,
+            "payload_offset": framing.payload_start,
+            "channel_mask": framing.channel_mask,
+        })
+    cadence = analyze_cadence(frames, **cadence_kwargs)
     return Analysis(groups=groups, framing=framing, channels=channels, cadence=cadence)
 
 

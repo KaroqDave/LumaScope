@@ -458,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.add_argument("--sig-len", type=int, default=2, dest="sig_len",
                       help="how many leading bytes define a command class")
     p_an.add_argument("--direction", choices=("out", "in", "any"), default="out",
-                      help="filter command grouping by transfer direction")
+                      help="filter all analysis sections by transfer direction")
     p_an.add_argument("--channel", type=int, default=None,
                       help="cadence reference channel (default: auto)")
     p_an.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")

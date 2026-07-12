@@ -6,7 +6,7 @@ exactly the packets the real device expects.
 """
 import pytest
 
-from lumascope import examples, replay, synthetic
+from lumascope import codec, examples, replay, synthetic
 from lumascope.decode import decode
 from lumascope.model import ChunkingModel, ChunkTarget
 
@@ -149,3 +149,17 @@ def test_usb_control_writer_uses_pyusb_control_transfer():
     assert args[:4] == (0x21, 0x09, 0x03EC, 0)
     assert args[4] == bytes.fromhex("ec400000")
     assert kwargs == {"timeout": 1000}
+
+
+def test_usb_control_w_value_precedence_and_empty_packet_fallback():
+    spec = examples.no_checksum_identity()
+    data = bytes.fromhex("ec400000")
+
+    assert codec.usb_control_w_value(spec, data) == 0x03EC
+    assert codec.usb_control_w_value(spec, b"") == 0x0300
+
+    spec.report_id = 0x55
+    assert codec.usb_control_w_value(spec, data) == 0x0355
+
+    spec.control.w_value = 0x1234
+    assert codec.usb_control_w_value(spec, data) == 0x1234

@@ -11,6 +11,7 @@ byte-identical to it, so the emitted code matches captured hardware traffic.
 
 from __future__ import annotations
 
+from ..codec import chunk_target_payload_len, fixed_usb_control_w_value
 from ..model import ChecksumModel, ProtocolSpec
 
 _VALUE_VAR = {"R": "r", "G": "g", "B": "b"}
@@ -23,7 +24,7 @@ def _class_name(name: str) -> str:
 
 def _led_offset_expr(spec: ProtocolSpec, wire_pos: int, *, count_expr: str = "LED_COUNT") -> str:
     le = spec.leds
-    if le.explicit_offsets is not None:
+    if le.explicit_offsets:
         return f"LED_OFFSETS[i][{wire_pos}]"
     if le.layout == "planar":
         return f"{le.base_offset} + {wire_pos}*{count_expr} + i"
@@ -54,24 +55,12 @@ def _scale_body(spec: ProtocolSpec) -> str:
 
 def _explicit_offset_table(spec: ProtocolSpec) -> str:
     offsets = spec.leds.explicit_offsets
-    if offsets is None:
+    if not offsets:
         return ""
     rows = ",\n".join(
         "            {" + ", ".join(str(v) for v in row) + "}" for row in offsets
     )
     return f"        static const int LED_OFFSETS[LED_COUNT][3] = {{\n{rows}\n        }};\n"
-
-
-def _logical_payload_len(spec: ProtocolSpec, led_count: int) -> int:
-    le = spec.leds
-    if le.explicit_offsets is not None:
-        rows = le.explicit_offsets[:led_count]
-        return max(max(row) for row in rows) + 1 if rows else 0
-    if le.layout == "planar":
-        return le.base_offset + len(le.channel_order) * led_count
-    if led_count <= 0:
-        return le.base_offset
-    return le.base_offset + (led_count - 1) * le.stride + len(le.channel_order)
 
 
 def _reflect_helpers(width: int, refin: bool, refout: bool) -> str:
@@ -197,7 +186,7 @@ def _raw_send_call(spec: ProtocolSpec, var: str, *, indent: str = "    ") -> str
     if spec.transport == "usb_control":
         return (
             f"{indent}{{ uint16_t wValue = CONTROL_W_VALUE >= 0 ? (uint16_t)CONTROL_W_VALUE "
-            f": (uint16_t)(0x0300 | {var}[0]);\n"
+            f": (uint16_t)(0x0300 | ({var}.empty() ? 0 : {var}[0]));\n"
             f"{indent}  int sent = libusb_control_transfer(dev, CONTROL_BM_REQUEST_TYPE, "
             f"CONTROL_B_REQUEST, wValue, CONTROL_W_INDEX,\n"
             f"{indent}      (unsigned char*){var}.data(), (uint16_t){var}.size(), CONTROL_TIMEOUT_MS);\n"
@@ -210,6 +199,8 @@ def _send_packet_body(spec: ProtocolSpec) -> str:
     ch = spec.chunking
     if not ch.present:
         return _raw_send_call(spec, "buf")
+    if ch.unit <= 0:
+        raise ValueError("invalid chunking unit")
 
     channel_expr = "channel" if ch.targets else "CHUNK_CHANNEL"
     capacity = ch.packet_len - ch.payload_start
@@ -221,6 +212,7 @@ def _send_packet_body(spec: ProtocolSpec) -> str:
     send = _raw_send_call(spec, "pkt", indent="            ")
     return f"""    const size_t max_payload = {max_payload};
     if (max_payload == 0) throw std::runtime_error("invalid chunk payload capacity");
+    if (buf.size() % CHUNK_UNIT != 0) throw std::runtime_error("chunk payload is not unit-aligned");
     for (size_t offset = 0; offset < buf.size(); offset += max_payload) {{
         const size_t payload_len = std::min(max_payload, buf.size() - offset);
         const bool last = (offset + payload_len) >= buf.size();
@@ -289,7 +281,8 @@ def render_cpp(spec: ProtocolSpec) -> str:
         )
     control_constants = ""
     if spec.transport == "usb_control":
-        w_value = spec.control.w_value if spec.control.w_value is not None else -1
+        fixed_w_value = fixed_usb_control_w_value(spec)
+        w_value = f"0x{fixed_w_value:04X}" if fixed_w_value is not None else "-1"
         control_constants = (
             f"    static constexpr uint8_t  CONTROL_BM_REQUEST_TYPE = 0x{spec.control.bm_request_type:02X};\n"
             f"    static constexpr uint8_t  CONTROL_B_REQUEST      = 0x{spec.control.b_request:02X};\n"
@@ -371,7 +364,7 @@ def _update_body(
     bright_line: str,
     cs_apply: str,
 ) -> str:
-    if not spec.chunking.targets:
+    if not (spec.chunking.present and spec.chunking.targets):
         return f"""        std::vector<uint8_t> buf(PACKET_LEN, 0x00);
 {report_line}{header_lines}
 {offset_table}
@@ -383,12 +376,13 @@ def _update_body(
     targets = ", ".join(
         "{"
         f"0x{t.channel:02X}, {t.led_count}, {t.color_start}, "
-        f"{t.payload_len if t.payload_len is not None else _logical_payload_len(spec, t.led_count)}"
+        f"{chunk_target_payload_len(spec, t)}"
         "}"
         for t in spec.chunking.targets
     )
     target_pack = _pack_block(spec, color_expr="color", count_expr="target.led_count")
-    return f"""        struct ChunkTarget {{
+    return f"""{offset_table}
+        struct ChunkTarget {{
             uint8_t channel;
             int led_count;
             int color_start;

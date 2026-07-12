@@ -8,9 +8,9 @@
  * buffer to the Python host over Frida's binary `send(meta, ArrayBuffer)` channel.
  *
  * Hook set (from the RE research, validated against a local harness):
- *   - WriteFile / DeviceIoControl / ReadFile: hooked on KernelBase only. kernel32 forwards
- *     to KernelBase, so one hook there catches calls made via either DLL and avoids the
- *     double-fire you get from hooking both (which previously needed a fragile dedup counter).
+ *   - WriteFile / DeviceIoControl / ReadFile: hook every unique kernel32 and KernelBase
+ *     export address. Some Windows builds expose distinct entry points, while others alias
+ *     them; address-level hook deduplication handles both cases without duplicate frames.
  *   - HidD_SetFeature / HidD_SetOutputReport / HidD_GetFeature (hid.dll).
  *   - WinUsb_WritePipe / WinUsb_ControlTransfer (winusb.dll). Their handle is an *interface*
  *     handle, so WinUsb_Initialize chains interface-handle -> device-handle -> VID:PID, and
@@ -41,6 +41,41 @@ function exportOf(mod, sym) {
   try { if (typeof mod.getExportByName === 'function') return mod.getExportByName(sym); } catch (e) {}
   try { if (typeof mod.findExportByName === 'function') return mod.findExportByName(sym); } catch (e) {}
   return null;
+}
+
+// PE exports may be tiny unconditional-jump thunks. Resolve the common x64 forms before
+// deduplicating so kernel32 -> KernelBase aliases get one interceptor, while genuinely distinct
+// implementations still each get hooked. Check every hop before reading its prologue: an
+// interceptor installed through an earlier export may already have rewritten that prologue.
+function resolveExportTarget(addr, isClaimed) {
+  if (!addr) return { target: null, hops: [] };
+  let current = addr;
+  const seen = new Set();
+  const hops = [];
+  try {
+    for (let depth = 0; depth <= 4; depth++) {
+      const key = current.toString();
+      if (seen.has(key)) break;
+      seen.add(key);
+      if (isClaimed(current)) return { target: null, hops: hops };
+      hops.push(current);
+      if (Process.arch !== 'x64' || depth === 4) break;
+      const op = current.readU8();
+      if (op === 0xff && current.add(1).readU8() === 0x25) { // jmp qword ptr [rip+rel32]
+        const displacement = current.add(2).readS32();
+        current = current.add(6 + displacement).readPointer();
+      } else if (op === 0xe9) {                              // jmp rel32
+        current = current.add(5 + current.add(1).readS32());
+      } else {
+        break;
+      }
+    }
+  } catch (e) {
+    // Falling back to the export itself is safe; retain every address already visited so a
+    // later alias cannot walk through an interceptor installed by this claim.
+    return { target: addr, hops: hops.length ? hops : [addr] };
+  }
+  return { target: current, hops: hops };
 }
 
 // --------------------------------------------------------------------------- //
@@ -95,8 +130,8 @@ function emit(api, transfer, direction, handleStr, abuf, n, extra) {
 // --------------------------------------------------------------------------- //
 // CreateFile / CloseHandle (handle map lifecycle)
 // --------------------------------------------------------------------------- //
-function hookCreateFile(mod, sym, wide) {
-  const addr = exportOf(mod, sym);
+function hookCreateFile(mod, sym, wide, target) {
+  const addr = target || exportOf(mod, sym);
   if (!addr) return;
   Interceptor.attach(addr, {
     onEnter(args) {
@@ -118,7 +153,7 @@ function hookCreateFile(mod, sym, wide) {
 }
 
 function hookClose(fileMod) {
-  const ch = exportOf(fileMod, 'CloseHandle');
+  const ch = claimFileExport('CloseHandle', exportOf(fileMod, 'CloseHandle'));
   if (ch) {
     Interceptor.attach(ch, { onEnter(args) { evict(args[0].toString()); } });
     log('hooked ' + fileMod.name + '!CloseHandle');
@@ -126,7 +161,7 @@ function hookClose(fileMod) {
   // NtClose catches closes that bypass kernel32/KernelBase.
   const ntdll = Process.findModuleByName('ntdll.dll');
   if (ntdll) {
-    const nc = exportOf(ntdll, 'NtClose');
+    const nc = claimFileExport('NtClose', exportOf(ntdll, 'NtClose'));
     if (nc) {
       Interceptor.attach(nc, { onEnter(args) { evict(args[0].toString()); } });
       log('hooked ntdll!NtClose');
@@ -262,21 +297,33 @@ function hookWinusbControl(mod) {
 // attachModuleObserver fires onAdded for already-loaded modules too, so guard against
 // double-hooking (attaching the same address twice breaks Frida's onLeave handling).
 const hookedModules = new Set();
-let fileApisHooked = false;
+const hookedFileExports = new Set();
 
-function hookFileApis() {
-  if (fileApisHooked) return;
-  // Prefer KernelBase: kernel32's file APIs forward to it, so one hook catches both paths.
-  const mod = Process.findModuleByName('KernelBase.dll') || Process.findModuleByName('kernel32.dll');
-  if (!mod) return;
-  fileApisHooked = true;
-  hookCreateFile(mod, 'CreateFileW', true);
-  hookCreateFile(mod, 'CreateFileA', false);
-  hookWrite(mod.name + '!WriteFile', exportOf(mod, 'WriteFile'),
+function claimFileExport(sym, addr) {
+  if (!addr) return null;
+  const keyOf = (hop) => sym + '@' + hop.toString();
+  const resolved = resolveExportTarget(addr, (hop) => hookedFileExports.has(keyOf(hop)));
+  if (!resolved.target) return null;
+  resolved.hops.forEach((hop) => hookedFileExports.add(keyOf(hop)));
+  // The final target is normally the last hop, but include it explicitly for fallback/cycle
+  // cases so every address that may receive an interceptor is claimed.
+  hookedFileExports.add(keyOf(resolved.target));
+  return resolved.target;
+}
+
+function hookFileApis(mod) {
+  let addr = claimFileExport('CreateFileW', exportOf(mod, 'CreateFileW'));
+  if (addr) hookCreateFile(mod, 'CreateFileW', true, addr);
+  addr = claimFileExport('CreateFileA', exportOf(mod, 'CreateFileA'));
+  if (addr) hookCreateFile(mod, 'CreateFileA', false, addr);
+  addr = claimFileExport('WriteFile', exportOf(mod, 'WriteFile'));
+  if (addr) hookWrite(mod.name + '!WriteFile', addr,
     { api: 'WriteFile', transfer: 'output', bufIdx: 1, lenIdx: 2 });
-  hookWrite(mod.name + '!DeviceIoControl', exportOf(mod, 'DeviceIoControl'),
+  addr = claimFileExport('DeviceIoControl', exportOf(mod, 'DeviceIoControl'));
+  if (addr) hookWrite(mod.name + '!DeviceIoControl', addr,
     { api: 'DeviceIoControl', transfer: 'control', bufIdx: 2, lenIdx: 3, ioctlIdx: 1 });
-  hookRead(mod.name + '!ReadFile', exportOf(mod, 'ReadFile'),
+  addr = claimFileExport('ReadFile', exportOf(mod, 'ReadFile'));
+  if (addr) hookRead(mod.name + '!ReadFile', addr,
     { api: 'ReadFile', transfer: 'input', bufIdx: 1, lenPtrIdx: 3, onlyMapped: true });
   hookClose(mod);
 }
@@ -286,7 +333,7 @@ function hookModule(mod) {
   if (hookedModules.has(name)) return;
   hookedModules.add(name);
   if (name === 'kernel32.dll' || name === 'kernelbase.dll') {
-    hookFileApis();
+    hookFileApis(mod);
   } else if (name === 'hid.dll') {
     hookWrite('hid!HidD_SetFeature', exportOf(mod, 'HidD_SetFeature'),
       { api: 'HidD_SetFeature', transfer: 'feature', bufIdx: 1, lenIdx: 2 });

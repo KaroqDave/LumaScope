@@ -31,6 +31,23 @@ def clamp8(v: int) -> int:
     return 0 if v < 0 else 255 if v > 255 else int(v)
 
 
+def fixed_usb_control_w_value(spec: ProtocolSpec) -> int | None:
+    """Return the control ``wValue`` that does not depend on packet contents."""
+    if spec.control.w_value is not None:
+        return spec.control.w_value
+    if spec.report_id is not None:
+        return (0x03 << 8) | (spec.report_id & 0xFF)
+    return None
+
+
+def usb_control_w_value(spec: ProtocolSpec, data: bytes) -> int:
+    """Resolve HID-class control ``wValue`` using the recovered spec and packet."""
+    fixed = fixed_usb_control_w_value(spec)
+    if fixed is not None:
+        return fixed
+    return (0x03 << 8) | ((data[0] if data else 0) & 0xFF)
+
+
 # --------------------------------------------------------------------------- #
 # Channel scaling
 # --------------------------------------------------------------------------- #
@@ -57,7 +74,10 @@ def led_channel_offset(layout: LedLayout, led: int, wire_pos: int) -> int:
 
     ``wire_pos`` indexes into ``layout.channel_order`` (0 = first wire channel).
     """
-    if layout.explicit_offsets is not None:
+    # An empty table carries no mapping information, so treat it like ``None`` and
+    # fall back to the regular layout.  This also keeps direct dataclass construction
+    # consistent with JSON loading, which normalizes an empty table to ``None``.
+    if layout.explicit_offsets:
         return layout.explicit_offsets[led][wire_pos]
     if layout.layout == "planar":
         return layout.base_offset + wire_pos * layout.count + led
@@ -69,11 +89,91 @@ def logical_payload_len(layout: LedLayout, led_count: int | None = None) -> int:
     count = layout.count if led_count is None else led_count
     if count <= 0:
         return layout.base_offset
-    if layout.explicit_offsets is not None:
+    if layout.explicit_offsets:
         return max(max(row) for row in layout.explicit_offsets[:count]) + 1
     if layout.layout == "planar":
         return layout.base_offset + len(layout.channel_order) * count
     return layout.base_offset + (count - 1) * layout.stride + len(layout.channel_order)
+
+
+def minimum_frame_len(spec: ProtocolSpec, led_count: int | None = None) -> int:
+    """Return the smallest buffer that can safely encode ``spec``.
+
+    Besides the LED payload, this includes every optional field that
+    :func:`encode_frame` may access.  Command and mode offsets are included even when a
+    particular call omits their values so a buffer sized from this helper stays safe
+    for every supported call shape.
+    """
+    required = logical_payload_len(spec.leds, led_count)
+
+    if not spec.chunking.present and spec.report_id is not None:
+        required = max(required, 1)
+
+    for offset, _value in spec.header.constant_bytes:
+        required = max(required, offset + 1)
+    if spec.header.command_offset is not None:
+        required = max(required, spec.header.command_offset + 1)
+    if spec.header.mode_offset is not None:
+        required = max(required, spec.header.mode_offset + 1)
+
+    if spec.brightness.present and spec.brightness.offset is not None:
+        required = max(required, spec.brightness.offset + 1)
+
+    cs = spec.checksum
+    if cs.present and cs.offset is not None and cs.range is not None:
+        required = max(required, cs.offset + cs.width, cs.range[1])
+
+    return required
+
+
+def _chunk_target_layout(spec: ProtocolSpec, target: ChunkTarget) -> LedLayout:
+    """Return the LED layout used to encode one chunk target."""
+    explicit_offsets = spec.leds.explicit_offsets
+    if explicit_offsets:
+        explicit_offsets = explicit_offsets[:target.led_count]
+    return replace(
+        spec.leds,
+        count=target.led_count,
+        explicit_offsets=explicit_offsets,
+    )
+
+
+def chunk_target_payload_len(spec: ProtocolSpec, target: ChunkTarget) -> int:
+    """Return and validate the logical buffer length for ``target``.
+
+    An omitted target length is inferred from both its LED layout and every inherited
+    frame field.  An explicit length remains authoritative, but undersized values are
+    rejected before encoding rather than causing an out-of-bounds write (or a checksum
+    slice assignment that silently grows the buffer).
+    """
+    layout = _chunk_target_layout(spec, target)
+    target_spec = replace(
+        spec,
+        report_id=None,
+        packet_len=0,
+        leds=layout,
+        chunking=replace(spec.chunking, present=False, targets=[]),
+    )
+    required = minimum_frame_len(target_spec)
+    unit = spec.chunking.unit if spec.chunking.present else 1
+    if unit <= 0:
+        raise ValueError("invalid chunking unit")
+    # Offset/count fields describe whole protocol units. Pad inferred logical buffers so the
+    # final packet never contains bytes that its count field rounds down and fails to declare.
+    required = ((required + unit - 1) // unit) * unit
+    if target.payload_len is None:
+        return required
+    if target.payload_len < required:
+        raise ValueError(
+            f"chunk target channel 0x{target.channel:02X} payload_len "
+            f"{target.payload_len} is smaller than required minimum {required}"
+        )
+    if target.payload_len % unit:
+        raise ValueError(
+            f"chunk target channel 0x{target.channel:02X} payload_len "
+            f"{target.payload_len} is not aligned to chunking unit {unit}"
+        )
+    return target.payload_len
 
 
 # --------------------------------------------------------------------------- #
@@ -207,15 +307,21 @@ def encode_packets(
 ) -> list[bytes]:
     """Build the actual wire packet(s) for ``colors`` under ``spec``.
 
-    Single-packet protocols return one frame. Chunked protocols first build the logical
-    LED buffer with :func:`encode_frame`, then split it using the recovered chunk header.
+    Single-packet protocols return one frame. Chunked protocols build either one logical
+    LED buffer or one buffer per configured target, then split each with the recovered
+    chunk header.
     """
-    frame = encode_frame(
-        spec, colors, brightness=brightness, command=command, mode_value=mode_value
-    )
     ch = spec.chunking
     if not ch.present:
-        return [frame]
+        return [
+            encode_frame(
+                spec,
+                colors,
+                brightness=brightness,
+                command=command,
+                mode_value=mode_value,
+            )
+        ]
     if ch.targets:
         packets: list[bytes] = []
         for target in ch.targets:
@@ -225,6 +331,9 @@ def encode_packets(
             )
             packets.extend(chunk_payload(spec, payload, channel=target.channel))
         return packets
+    frame = encode_frame(
+        spec, colors, brightness=brightness, command=command, mode_value=mode_value
+    )
     return chunk_payload(spec, frame)
 
 
@@ -237,10 +346,8 @@ def encode_chunk_target_payload(
     mode_value: int | None = None,
 ) -> bytes:
     """Build the logical payload buffer for one chunk target."""
-    layout = replace(spec.leds, count=target.led_count)
-    if spec.leds.explicit_offsets is not None:
-        layout.explicit_offsets = spec.leds.explicit_offsets[:target.led_count]
-    payload_len = target.payload_len or logical_payload_len(layout, target.led_count)
+    layout = _chunk_target_layout(spec, target)
+    payload_len = chunk_target_payload_len(spec, target)
     sub_spec = replace(
         spec,
         report_id=None,
@@ -266,6 +373,10 @@ def chunk_payload(spec: ProtocolSpec, payload: bytes, *, channel: int | None = N
         raise ValueError("invalid chunking packet length/payload_start")
     if ch.unit <= 0:
         raise ValueError("invalid chunking unit")
+    if len(payload) % ch.unit:
+        raise ValueError(
+            f"chunk payload length {len(payload)} is not aligned to chunking unit {ch.unit}"
+        )
 
     capacity = ch.packet_len - ch.payload_start
     max_payload = ch.chunk_count * ch.unit if ch.chunk_count else capacity - (capacity % ch.unit)

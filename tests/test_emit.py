@@ -154,6 +154,8 @@ def test_cpp_emits_chunked_send_loop():
 
 def test_cpp_emits_multi_target_chunked_send_loop():
     spec = examples.no_checksum_identity()
+    spec.header.constant_bytes = []
+    spec.leds.base_offset = 0
     spec.chunking = ChunkingModel(
         present=True,
         packet_len=14,
@@ -179,6 +181,95 @@ def test_cpp_emits_multi_target_chunked_send_loop():
     assert "pkt[CHUNK_CHANNEL_POS] = (uint8_t)(channel | (last ? CHUNK_FINAL_FLAG : 0));" in cpp
 
 
+def test_cpp_multi_target_infers_safe_payload_len_and_rejects_undersizing():
+    spec = examples.interleaved_grb_sum8()
+    spec.chunking = ChunkingModel(
+        present=True,
+        packet_len=14,
+        prefix=b"\xEC\x40",
+        channel_pos=2,
+        offset_pos=3,
+        count_pos=4,
+        payload_start=5,
+        unit=3,
+        chunk_count=1,
+        final_flag=0x80,
+        targets=[ChunkTarget(channel=2, led_count=2)],
+    )
+
+    cpp = render_cpp(spec)
+
+    # Two LEDs need only 8 bytes; inherited fields need 34, rounded to the 3-byte chunk unit.
+    assert "{0x02, 2, 0, 36}" in cpp
+    assert "std::vector<uint8_t> buf(target.payload_len, 0x00);" in cpp
+    assert "buf[32] = clamp8" in cpp
+    assert "buf[33] = Checksum(buf);" in cpp
+    assert "buf.size() % CHUNK_UNIT != 0" in cpp
+
+    spec.chunking.targets[0].payload_len = 33
+    with pytest.raises(ValueError, match="payload_len 33.*required minimum 36"):
+        render_cpp(spec)
+
+    spec.chunking.targets[0].payload_len = 37
+    with pytest.raises(ValueError, match="payload_len 37.*chunking unit 3"):
+        render_cpp(spec)
+
+
+def test_cpp_multi_target_declares_explicit_offset_table_before_use():
+    spec = ProtocolSpec(
+        name="explicit-targets",
+        packet_len=0,
+        leds=LedLayout(
+            count=2,
+            channel_order="RGB",
+            explicit_offsets=[(5, 2, 9), (6, 3, 10)],
+        ),
+        chunking=ChunkingModel(
+            present=True,
+            packet_len=16,
+            channel_pos=0,
+            offset_pos=1,
+            count_pos=2,
+            payload_start=3,
+            unit=1,
+            targets=[ChunkTarget(channel=4, led_count=2)],
+        ),
+    )
+
+    cpp = render_cpp(spec)
+
+    declaration = cpp.index("static const int LED_OFFSETS[LED_COUNT][3]")
+    first_use = cpp.index("buf[LED_OFFSETS[i][0]]")
+    assert declaration < first_use
+    assert "{0x04, 2, 0, 11}" in cpp
+
+
+def test_cpp_ignores_targets_when_chunking_is_not_present():
+    spec = examples.no_checksum_identity()
+    spec.chunking = ChunkingModel(
+        present=False,
+        targets=[ChunkTarget(channel=4, led_count=2, payload_len=8)],
+    )
+
+    cpp = render_cpp(spec)
+
+    assert "struct ChunkTarget" not in cpp
+    assert "SendPacket(buf, target.channel)" not in cpp
+    assert "void SendPacket(std::vector<uint8_t>& buf, uint8_t channel)" not in cpp
+    assert "void SendPacket(std::vector<uint8_t>& buf)" in cpp
+    assert "SendPacket(buf);" in cpp
+
+
+def test_cpp_empty_explicit_offsets_use_regular_layout():
+    spec = examples.no_checksum_identity()
+    spec.leds.explicit_offsets = []
+
+    cpp = render_cpp(spec)
+
+    assert "LED_OFFSETS" not in cpp
+    assert "buf[2 + i*STRIDE + 0]" in cpp
+
+
 def test_cpp_usb_control_uses_libusb_instead_of_hid_fallback():
     spec = examples.no_checksum_identity()
     spec.transport = "usb_control"
@@ -187,3 +278,23 @@ def test_cpp_usb_control_uses_libusb_instead_of_hid_fallback():
     assert "libusb_control_transfer" in cpp
     assert "CONTROL_BM_REQUEST_TYPE = 0x21" in cpp
     assert "hid_write" not in cpp
+
+
+def test_cpp_usb_control_w_value_matches_replay_precedence():
+    spec = examples.no_checksum_identity()
+    spec.transport = "usb_control"
+    spec.report_id = 0x55
+
+    cpp = render_cpp(spec)
+
+    assert "CONTROL_W_VALUE        = 0x0355;" in cpp
+
+    spec.control.w_value = 0x1234
+    cpp = render_cpp(spec)
+    assert "CONTROL_W_VALUE        = 0x1234;" in cpp
+
+    spec.control.w_value = None
+    spec.report_id = None
+    cpp = render_cpp(spec)
+    assert "CONTROL_W_VALUE        = -1;" in cpp
+    assert "0x0300 | (buf.empty() ? 0 : buf[0])" in cpp

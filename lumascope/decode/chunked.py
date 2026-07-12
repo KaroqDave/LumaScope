@@ -179,23 +179,33 @@ def reassemble_auto(frames: list[CaptureFrame]) -> tuple[Optional[ChunkFraming],
     return framing, reassemble(frames, framing)
 
 
-def dominant_command_class(frames: list[CaptureFrame]) -> list[CaptureFrame]:
-    """Pick the largest group of outbound frames sharing (length, report id, command).
+def dominant_command_class(
+    frames: list[CaptureFrame],
+    *,
+    direction: Optional[str] = "out",
+) -> list[CaptureFrame]:
+    """Pick the largest group of frames sharing (length, report id, command).
 
     A raw bus/hook capture is full of unrelated traffic (other devices, polls); the chunked
-    color writes are the dominant outbound command class.
+    color writes are normally the dominant outbound command class. ``direction=None`` keeps
+    both transfer directions for callers implementing an ``any`` filter.
     """
     from collections import Counter
 
-    out = [f for f in frames if f.direction == "out" and len(f.data) >= 5]
-    if not out:
+    matching = [
+        f for f in frames
+        if (direction is None or f.direction == direction) and len(f.data) >= 5
+    ]
+    if not matching:
         return []
-    key = Counter((len(f.data), f.data[0], f.data[1]) for f in out).most_common(1)[0][0]
-    return [f for f in out if (len(f.data), f.data[0], f.data[1]) == key]
+    key = Counter((len(f.data), f.data[0], f.data[1]) for f in matching).most_common(1)[0][0]
+    return [f for f in matching if (len(f.data), f.data[0], f.data[1]) == key]
 
 
 def reassemble_capture(
     frames: list[CaptureFrame],
+    *,
+    direction: Optional[str] = "out",
 ) -> tuple[Optional[ChunkFraming], dict[int, bytes]]:
     """End-to-end on a noisy capture: isolate the dominant command class, infer, reassemble."""
-    return reassemble_auto(dominant_command_class(frames))
+    return reassemble_auto(dominant_command_class(frames, direction=direction))
