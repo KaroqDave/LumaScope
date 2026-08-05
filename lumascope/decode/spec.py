@@ -146,7 +146,15 @@ def _validate(spec: ProtocolSpec, corpus: Corpus) -> Validation:
             continue
         v.total += 1
         brightness = lf.step.brightness if lf.step.kind == KIND_BRIGHTNESS else 255
-        regenerated = codec.encode_frame(spec, lf.step.colors, brightness=brightness)
+        try:
+            regenerated = codec.encode_frame(spec, lf.step.colors, brightness=brightness)
+        except (IndexError, ValueError) as exc:
+            # A spec that cannot even encode is a failed validation, not a crash. This
+            # fires when the recovered layout does not fit the packet -- reporting it as
+            # a mismatch keeps `decode` returning a result the caller can explain.
+            if len(v.failures) < 12:
+                v.failures.append((lf.step.describe(), lf.data.hex(), f"<unencodable: {exc}>"))
+            continue
         if regenerated == lf.data:
             v.matched += 1
         elif len(v.failures) < 12:

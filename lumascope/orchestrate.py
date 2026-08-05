@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import inspect
 from collections import Counter
+from dataclasses import replace
 from typing import Callable, Optional
 
 from .decode.chunked import ChunkFraming, dominant_command_class, infer_framing, reassemble
@@ -174,7 +175,58 @@ def _pair_chunked(
                     meta=meta,
                 )
                 labeled.append(LabeledFrame(step=step, frame=frame))
+
+    # ``led_count`` is what the operator says the *device* has, but a chunked capture is
+    # paired down to a single wire channel, which may carry only some of them: an Aura
+    # board splits 58 LEDs across channels of 48, 8 and 2. Keeping the device-wide count
+    # here describes a buffer far larger than the one paired, and the decoder then builds
+    # a spec that writes past the end of its own packet.
+    channel_leds = max((len(lf.frame.data) for lf in labeled), default=0) // 3
+    if channel_leds:
+        led_count = min(led_count, channel_leds)
+        labeled = _align_colors(labeled, channel_leds)
     return Corpus(frames=labeled, led_count=led_count, device_name=device_name, vid=vid, pid=pid)
+
+
+def _align_colors(labeled: list[LabeledFrame], channel_leds: int) -> list[LabeledFrame]:
+    """Relabel each step with the slice of the colour vector this channel actually drives.
+
+    A host addresses one logical strip, but the device splits it across wire channels, and
+    a channel need not start at logical LED 0 -- OpenRGB lists an Aura board's 2 mainboard
+    LEDs before its 48-LED header, so that header carries colours [2:50]. Labelling it with
+    [0:48] misaligns every per-LED step, and the decode fails in a way that reads like a
+    protocol mismatch rather than an indexing one.
+
+    The offset is found by which LEDs are *lit*: that signal survives whatever channel order
+    and scaling the wire uses, so it can be resolved before any of those are known.
+    """
+    widest = max((len(lf.step.colors) for lf in labeled), default=0)
+    if widest <= channel_leds:
+        return labeled
+
+    def lit_in_buffer(buf: bytes) -> set[int]:
+        return {i for i in range(channel_leds) if any(buf[i * 3:i * 3 + 3])}
+
+    best_offset, best_score = 0, -1
+    for offset in range(widest - channel_leds + 1):
+        score = 0
+        for lf in labeled:
+            window = lf.step.colors[offset:offset + channel_leds]
+            lit_colors = {i for i, c in enumerate(window) if any(c)}
+            if lit_colors == lit_in_buffer(lf.frame.data):
+                score += 1
+        if score > best_score:
+            best_offset, best_score = offset, score
+
+    if best_offset == 0:
+        return labeled
+    return [
+        LabeledFrame(
+            step=replace(lf.step, colors=lf.step.colors[best_offset:best_offset + channel_leds]),
+            frame=lf.frame,
+        )
+        for lf in labeled
+    ]
 
 
 def _chunking_meta(

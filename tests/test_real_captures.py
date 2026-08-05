@@ -142,3 +142,47 @@ def test_live_corpus_reencodes_byte_for_byte():
     for lf in corpus.frames:
         brightness = lf.step.brightness if lf.step.brightness is not None else 255
         assert codec.encode_frame(spec, lf.step.colors, brightness=brightness) == lf.frame.data
+
+
+CHUNKED_CORPUS = FIXTURES / "aura_chunked_48led.corpus.json"
+
+
+def test_decodes_a_chunked_48led_corpus_from_real_hardware():
+    """The strongest hardware case: a 48-LED addressable header, streamed in chunks.
+
+    Captured by `lumascope sweep --driver openrgb` against an ASUS Aura USB controller
+    with a real strip attached. Unlike the 2-LED mainboard zone, this gives the layout
+    and stride passes 48 LEDs of evidence, and exercises chunk reassembly end to end.
+    """
+    from lumascope.capture.serialize import load_corpus
+    from lumascope.decode import decode
+
+    result = decode(load_corpus(str(CHUNKED_CORPUS)), name="aura-48")
+    assert result.validation.ok, result.validation.summary()
+
+    spec = result.spec
+    assert spec.leds.count == 48
+    assert spec.leds.layout == "interleaved"
+    assert spec.leds.stride == 3
+    assert spec.leds.channel_order == "RGB"
+    assert spec.leds.scaling.type == "identity"
+    assert spec.checksum.kind == "none"
+
+    # The chunking model, recovered rather than assumed: EC 40, 20 LEDs per chunk.
+    assert spec.chunking.present
+    assert spec.chunking.prefix == b"\xEC\x40"
+    assert spec.chunking.chunk_count == 20
+    assert spec.chunking.unit == 3
+    assert spec.chunking.payload_start == 5
+
+
+def test_chunked_corpus_reencodes_byte_for_byte():
+    from lumascope import codec
+    from lumascope.capture.serialize import load_corpus
+    from lumascope.decode import decode
+
+    corpus = load_corpus(str(CHUNKED_CORPUS))
+    spec = decode(corpus, name="aura-48").spec
+    for lf in corpus.frames:
+        brightness = lf.step.brightness if lf.step.brightness is not None else 255
+        assert codec.encode_frame(spec, lf.step.colors, brightness=brightness) == lf.frame.data

@@ -272,3 +272,40 @@ def test_pairing_falls_back_when_every_packet_is_boilerplate():
     ]
     corpus = orchestrate.pair(raw, led_count=1, chunked=False)
     assert len(corpus.frames) == 4
+
+
+# --------------------------------------------------------------------------- #
+# Channels that do not start at logical LED 0
+# --------------------------------------------------------------------------- #
+def test_pairing_finds_which_colour_slice_a_channel_drives():
+    """A wire channel need not start at logical LED 0.
+
+    OpenRGB lists an Aura board's 2 mainboard LEDs before its 48-LED header, so that
+    header carries colours [2:50]. Labelling it [0:48] misaligns every per-LED step and
+    the decode fails as if the protocol were wrong. Verified on hardware: the corpus
+    decodes 287/287 with the offset applied and 45/287 without.
+    """
+    offset, channel_leds, total = 2, 4, 8
+    raw = []
+    for lit in range(channel_leds):
+        colors = [(0, 0, 0)] * total
+        colors[offset + lit] = (255, 0, 0)
+        step = SweepStep(step_id=lit, kind=KIND_UNIFORM, colors=colors, value=255)
+        buf = bytearray(channel_leds * 3)
+        buf[lit * 3] = 255
+        raw.append((step, [CaptureFrame(data=bytes(buf), direction="out")]))
+
+    labeled = orchestrate._align_colors(
+        [orchestrate.LabeledFrame(step=s, frame=f[0]) for s, f in raw], channel_leds)
+
+    for lit, lf in enumerate(labeled):
+        assert len(lf.step.colors) == channel_leds
+        assert lf.step.colors[lit] == (255, 0, 0)
+
+
+def test_colour_alignment_is_a_no_op_when_the_channel_covers_everything():
+    raw = [orchestrate.LabeledFrame(
+        step=SweepStep(step_id=i, kind=KIND_UNIFORM, colors=[(i, 0, 0)] * 4, value=i),
+        frame=CaptureFrame(data=bytes([i, 0, 0] * 4), direction="out"))
+        for i in range(3)]
+    assert orchestrate._align_colors(raw, 4) is raw
