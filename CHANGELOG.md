@@ -4,6 +4,58 @@ All notable changes to LumaScope are recorded here. Versions follow
 [semantic versioning](https://semver.org/); while the project is pre-1.0 the CLI surface
 may still change between minor releases.
 
+## [0.2.3] — 2026-08-06
+
+The sweep path — capture → labelled corpus → validated spec → C++ — is now verified against
+real hardware. `lumascope sweep --driver openrgb` drove an ASUS Aura USB controller through
+287 known states while Frida recorded the traffic, and the decoder recovered the protocol from
+scratch: 48 LEDs interleaved, stride 3, RGB, identity scaling, no checksum, plus the chunking
+model itself. All 287 frames re-encode byte-for-byte.
+
+Getting there took three fixes. Each produced a wrong answer that looked like a right one, so
+each is worth reading if you decoded anything with 0.2.1.
+
+(0.2.2 was skipped.)
+
+### Fixed
+
+- **Every step of a sweep could be labelled with the wrong packet.** Devices written per zone
+  finish an update with a zero-length apply for each zone that has no LEDs in it. Pairing took
+  "the last outbound write of the modal length", so it captured those empty applies and the
+  whole corpus decoded to nothing — `0/63 frames round-trip` from a sweep that otherwise looked
+  successful. A packet byte-identical across the whole sweep cannot be the one carrying the
+  state, so those are now identified and skipped.
+- **A sweep of a multi-channel device crashed.** The operator gives the count for the whole
+  device, but a chunked capture is paired down to a single wire channel carrying only part of
+  it. The resulting spec encoded past the end of its own packet and raised `IndexError` as a
+  bare traceback. The corpus now takes its LED count from the buffer actually paired, and an
+  unencodable spec is reported as a failed validation rather than escaping as an exception.
+- **Wire channels that do not start at logical LED 0 decoded wrongly.** A host addresses one
+  strip while the device splits it across channels, and a channel may begin partway in — an
+  Aura board's 48-LED header carries logical LEDs 2..49, because the 2 mainboard LEDs are
+  listed first. Labelled from LED 0, every per-LED step misaligns and the failure reads like a
+  protocol mismatch rather than an indexing one (45/287 instead of 287/287). Pairing now
+  recovers the offset from which LEDs are lit — a signal that survives whatever channel order
+  and scaling the wire uses, so it resolves before either is known.
+- `replay --write` no longer proceeds while `SignalRgbService` is running. Closing the
+  SignalRGB window leaves that service holding the device, and only the GUI was being matched.
+
+### Documentation
+
+- The ASUS Aura write-up records that channel lengths are configuration rather than protocol:
+  a second host (SignalRGB) drives the same device with channels of 48/8/4 LEDs, so a channel's
+  final chunk is short, channel 4 is not fixed at 2 LEDs, and channel 2 need not be present.
+- It also closes an open question it had raised. It predicted that reaching the `EC 35`/`EC 36`
+  path would need an OpenRGB capture; that capture was taken and **both commands appear**. Their
+  field semantics are deliberately left uncharacterised — that needs a single-variable sweep,
+  not the handful of packets observed.
+
+### Added
+
+- Two hardware-derived test fixtures: a 63-frame corpus from the 2-LED mainboard zone, and a
+  33-frame chunked corpus from the 48-LED addressable header. Between them they are the first
+  decode tests whose input came off a physical device.
+
 ## [0.2.1] — 2026-08-06
 
 First release verified against live hardware: Frida attached to SignalRGB driving an ASUS

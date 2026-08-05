@@ -215,3 +215,40 @@ is also wired into the **sweep** path: `sweep --decode` auto-detects chunking, r
 step into a full per-channel buffer, picks the LED-data channel, and decodes - producing a full
 `ProtocolSpec` + C++ for chunked devices end-to-end (override with `--channel N` /
 `--no-reassemble`).
+
+## `EC 35` / `EC 36` do exist - OpenRGB emits them
+
+The section above concluded that Armoury Crate never sends a native-effect command, and
+predicted that reaching one "needs an OpenRGB capture or a guarded write". An OpenRGB
+capture was taken, and it does:
+
+```bash
+lumascope capture --attach OpenRGB.exe --duration 10 --out openrgb.frames.jsonl
+lumascope inspect --frames openrgb.frames.jsonl
+```
+
+Setting a mode on the mainboard device emits both, once per channel, before the `EC 40`
+colour stream resumes:
+
+```
+ec 35 00 00 00 01 ...      ec 36 00 03 00 00 ...      (channel 0)
+ec 35 01 00 00 01 ...      ec 36 00 04 00 00 ...      (channel 1)
+ec 35 02 00 00 01 ...      ec 36 00 08 00 00 ...      (channel 2)
+```
+
+What is established: both command classes are real, both are 65-byte reports on the same
+endpoint as `EC 40`, `EC 35` carries the channel index in byte 2, and `EC 36`'s byte 3
+varies per channel (0x03 / 0x04 / 0x08 here).
+
+What is **not** established: the meaning of those bytes. This was a handful of packets from
+one mode change, not a single-variable sweep. Characterising them properly needs the same
+discipline used for `EC 40` - change one thing, diff two captures:
+
+```bash
+lumascope inspect --frames mode_a.frames.jsonl --diff mode_b.frames.jsonl --command ec35
+```
+
+The finding that matters for now is methodological: the original conclusion was correct and
+correctly scoped. Armoury Crate really does not use these commands, and that was a fact about
+*the host*, not about the device. A protocol is only as complete as the set of hosts you have
+watched drive it.

@@ -220,11 +220,22 @@ end-to-end on a live machine:
    host-side phase rate - the rainbow's cycle period spans ~1.6 s (fast) to ~16.5 s (slow) at a
    fixed ~180-200 Hz refresh.
 
+6. **Ran the whole loop back** with `sweep --driver openrgb`: OpenRGB applied 287 known states
+   while Frida recorded the traffic, and the decoder recovered the protocol from scratch -
+   48 LEDs interleaved, stride 3, RGB, identity scaling, no checksum, plus the chunking model
+   itself (`EC 40`, 20 LEDs per chunk, payload at byte 5). **287/287 frames re-encode
+   byte-for-byte.** Both hardware corpora are committed as test fixtures.
+
 A controlled single-colour capture confirmed **RGB** order, and the result - written up in
 [docs/asus-aura-pid19af-protocol.md](docs/asus-aura-pid19af-protocol.md) - matches LumaCore's
 existing encoder, locked by a passing golden test. That doc is the best worked example of the
-whole loop, and the methodological punchline: because Armoury Crate streams everything, an Aura
-capture cannot reach the `EC 35`/`EC 36` path (that needs an OpenRGB capture or a guarded write).
+whole loop.
+
+It also carries the methodological punchline. It concluded that an Aura capture cannot reach the
+`EC 35`/`EC 36` path because Armoury Crate streams everything, and predicted that reaching it
+would need an OpenRGB capture. That capture was taken, and **both commands appeared** - so the
+original conclusion was right, and right about *the host* rather than the device. A protocol is
+only as complete as the set of hosts you have watched drive it.
 
 ## Architecture
 
