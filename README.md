@@ -17,6 +17,142 @@ an OpenRGB-style C++ `RGBController` skeleton - is the deliverable. It was built
 [**LumaCore**](https://github.com/KaroqDave/LumaCore) RGB product, but nothing ties it to one
 consumer.
 
+## Quickstart (60 seconds, no hardware)
+
+```bash
+git clone https://github.com/KaroqDave/LumaScope && cd LumaScope
+pip install -e .
+lumascope
+```
+
+Bare `lumascope` prints a three-step path for newcomers. The interesting one is reading real
+captured bytes from an ASUS motherboard, bundled in [`samples/`](samples/):
+
+```bash
+lumascope show --frames samples/aura-red.frames.jsonl
+```
+
+```
+frame 0  [usbpcap  65 bytes]
+        00 01 02 03  04 05 06 07  08 09 10 11  12 13 14 15
+     0  ec 40 84 00  02 ff 00 00  ff 00 00 00  00 00 00 00  |.@..............|
+        id cm ch of  ct R  G  B   R  G  B  --  -- -- -- --
+    16  00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00  |................|
+        *  (2 identical rows omitted)
+  id=report id  cm=command  ch=channel  of=offset  ct=count  R/G/B=LED colour data
+
+  offset  field             bytes              value
+  0       report id         ec                 0xec (236)
+  1       command           40                 0x40 (64)
+  2       channel           84                 channel 4  + final-chunk flag 0x80
+  3       offset            00                 starts at LED 0 (byte 0 of the buffer)
+  4       count             02                 2 LED(s) in this chunk
+  5..10   LED colour data   ff 00 00 ff 00 00  2 LED(s)
+  11..64  unused / padding  00 00 00 00 00 ..  54 byte(s)
+```
+
+**The dump explains itself.** Every byte is tagged with what it is, colour bytes render in their
+actual colour on a colour terminal, repeated rows collapse, and offsets are decimal so they match
+the byte indices every other command reports. You should never need a second tool to read a dump.
+
+Then see what those packets add up to, and get the full structural report:
+
+```bash
+lumascope show --frames samples/aura-red.frames.jsonl --leds
+lumascope analyze --frames samples/aura-red.frames.jsonl
+```
+
+[`samples/README.md`](samples/README.md) walks through more, including a real single-variable
+diff that proves a negative: the ASUS rainbow effect has **no speed field** on the wire.
+
+## Install
+
+The **decode + emit core is pure Python stdlib**. Capture and stimulus backends are optional
+extras (native wheels); install only what you use. Quote the extras — `zsh` on macOS treats
+bare brackets as a glob.
+
+```bash
+pip install -e .                 # the engine + CLI
+lumascope doctor                 # what works here, and the command to fix what doesn't
+
+pip install -e ".[dev]" && pytest    # run the test suite
+pip install -e ".[frida]"            # optional: Frida in-process capture (HID/WinUSB)
+pip install -e ".[stimulus]"         # optional: OpenRGB driver + GUI automation
+pip install -e ".[usb]"              # optional: pyusb for guarded USB control replay
+# USBPcap capture additionally needs Wireshark (tshark) + USBPcap installed system-wide
+```
+
+Requires Python 3.10+. Windows is the primary target for live capture (HID/WinUSB/USBPcap); the
+decode/emit engine and everything in `samples/` runs anywhere.
+
+Every command also works as `python -m lumascope.cli <command>` if you'd rather not install.
+
+## Commands
+
+Run `lumascope <command> --help` for options, or `lumascope guide` for the whole workflow.
+
+| Command | What it does | Hardware? |
+|---|---|---|
+| `doctor` | what this machine can do, and the exact command to unlock the rest | no |
+| `devices` | list connected devices with VID:PID, plus vendor lighting processes | no |
+| `guide` | the end-to-end reverse-engineering workflow | no |
+| `demo <example>` | full synth -> decode -> validate -> C++ pipeline on one example | no |
+| `selftest` | prove the decoder recovers the built-in example specs | no |
+| `show` | read packets as annotated, colour-coded hex (`--leds` for the buffer) | no |
+| `analyze` | one-shot report: command classes, chunk framing, effect timing | no |
+| `inspect` | group by command class, or diff two single-variable captures | no |
+| `reassemble` | rebuild a chunked/streamed capture into per-channel buffers | no |
+| `cadence` | measure a streamed effect's speed from packet timing | no |
+| `decode` | decode a labeled corpus -> protocol spec (+ optional C++) | no |
+| `emit` | render a protocol spec -> JSON or C++ skeleton | no |
+| `capture` | record device writes - Frida hook or USBPcap sniff | yes |
+| `sweep` | drive a stimulus matrix, capture, pair into a labeled corpus | yes |
+| `replay` | replay a decoded spec to verify it (dry-run by default, safety-gated) | yes |
+
+## File types
+
+Three formats, distinguished by content rather than extension — pass the wrong one and the tool
+tells you which command takes it.
+
+| Suffix | What it holds | Written by |
+|---|---|---|
+| `.frames.jsonl` | raw packets straight off the device | `capture` |
+| `.corpus.json` | packets **paired with the state that caused them** | `sweep` |
+| `.spec.json` | the decoded protocol | `decode`, `emit` |
+
+Only a corpus can be decoded: decoding needs to know what each packet *meant*.
+
+## Reversing a real device (Windows)
+
+`lumascope guide` prints this as a walkthrough. The short version:
+
+```bash
+# 1. what can this machine do, and what am I targeting?
+lumascope doctor
+lumascope devices           # VID:PID, ranked; plus vendor processes running now
+
+# 2. record the vendor app driving the device (run elevated for USBPcap / SYSTEM services)
+lumascope capture --attach LightingService.exe --duration 20 --out red.frames.jsonl
+#    ...or sniff the bus when the colour buffer never appears in-process:
+lumascope capture --backend usbpcap --vid 0x0b05 --pid 0x19af \
+    --duration 20 --out red.frames.jsonl
+
+# 3. read what you caught
+lumascope show --frames red.frames.jsonl
+lumascope analyze --frames red.frames.jsonl
+
+# 4. change ONE thing, capture again, and diff to localize the byte that carries it
+lumascope inspect --frames red.frames.jsonl --diff green.frames.jsonl
+
+# 5. a guided sweep produces a *labeled* corpus and decodes it in one shot
+lumascope sweep --led-count 120 --driver manual --attach LightingService.exe \
+    --out aura.corpus.json --decode --emit-cpp AuraController.cpp
+
+# 6. (optional) verify the decoded spec by replaying it - vendor app CLOSED first
+lumascope replay --spec aura.spec.json --device-path "<path>"          # dry-run
+lumascope replay --spec aura.spec.json --device-path "<path>" --write --yes
+```
+
 ## Proven on real hardware
 
 LumaScope reverse-engineered an **ASUS Aura motherboard controller** (USB `VID_0B05 PID_19AF`)
@@ -42,82 +178,6 @@ existing encoder, locked by a passing golden test. That doc is the best worked e
 whole loop, and the methodological punchline: because Armoury Crate streams everything, an Aura
 capture cannot reach the `EC 35`/`EC 36` path (that needs an OpenRGB capture or a guarded write).
 
-## Install
-
-The **decode + emit core is pure Python stdlib** - no install needed to run the engine or its
-tests. Capture and stimulus backends are optional extras (native wheels); install only what you
-use.
-
-```bash
-cd lumascope
-python -m lumascope.cli doctor          # report what's installed / runnable here
-pip install -e .[dev] && pytest         # run the test suite
-
-pip install -e .[frida]                 # optional: Frida in-process capture (HID/WinUSB)
-pip install -e .[stimulus]              # optional: OpenRGB driver + GUI automation
-pip install -e .[usb]                   # optional: pyusb for guarded USB control replay
-# USBPcap capture additionally needs Wireshark (tshark) + USBPcap installed system-wide
-```
-
-Requires Python 3.10+. Windows is the primary target for live capture (HID/WinUSB/USBPcap); the
-decode/emit engine runs anywhere.
-
-## Commands
-
-Run `python -m lumascope.cli <command> --help` for options.
-
-| Command | What it does | Hardware? |
-|---|---|---|
-| `doctor` | report installed tools + which phases are runnable here | no |
-| `selftest` | prove the decoder recovers the built-in example specs | no |
-| `demo <example>` | full synth -> decode -> validate -> C++ pipeline on one example | no |
-| `decode` | decode a saved capture corpus -> protocol spec (+ optional C++) | no |
-| `reassemble` | reassemble a chunked/streamed capture into per-channel buffers | no |
-| `inspect` | group a capture by command class, or diff two single-variable captures to localize a changed byte | no |
-| `cadence` | measure a streamed effect's timing - frame rate + colour-cycle period (i.e. its *speed*) | no |
-| `analyze` | one-shot inspect + chunk reassembly + cadence report for a saved capture | no |
-| `emit` | render a protocol spec -> JSON or C++ skeleton | no |
-| `capture` | record device writes - Frida hook (`--backend frida`) or USBPcap sniff (`--backend usbpcap`) | yes |
-| `sweep` | drive a stimulus through the matrix, capture, pair into a labeled corpus, optionally decode + emit | yes |
-| `replay` | replay a decoded spec to the device to verify it (dry-run by default, safety-gated) | yes |
-
-## Workflows
-
-### No hardware - prove the engine
-```bash
-python -m lumascope.cli selftest        # recover interleaved/planar/gamma/CRC example specs
-python -m lumascope.cli demo gamma      # synth -> decode -> validate -> C++ for one example
-```
-
-### Real device - reverse a protocol (Windows)
-See [docs/asus-aura-pid19af-protocol.md](docs/asus-aura-pid19af-protocol.md) for a full worked
-example. The shape of the loop:
-
-```bash
-# 1. find the device + the process that writes to it (run elevated to see SYSTEM services)
-python -m lumascope.cli doctor
-
-# 2a. capture passively while you change colours in the vendor app (in-process hook):
-python -m lumascope.cli capture --attach <VendorService> --duration 30 --out caps.jsonl
-# 2b. ...or sniff the USB bus when the bytes aren't visible in-process (needs USBPcap + admin):
-python -m lumascope.cli capture --backend usbpcap --interface \\.\USBPcap1 --duration 30 --out caps.jsonl
-
-# 3. inspect the structure; for streamed/chunked protocols, reassemble per-channel buffers:
-python -m lumascope.cli reassemble --frames caps.jsonl --triplets
-#    for command/mode protocols, group by command class - then change ONE thing and diff to
-#    localize the byte that carries it (the rigorous version of eyeballing two hex dumps):
-python -m lumascope.cli inspect --frames caps.jsonl --vid 0x0b05 --pid 0x19af
-python -m lumascope.cli inspect --frames red.jsonl --diff green.jsonl --vid 0x0b05 --pid 0x19af
-
-# 4. a guided sweep produces a *labeled* corpus and decodes it in one shot:
-python -m lumascope.cli sweep --led-count <N> --driver manual --attach <VendorService> \
-    --out corpus.json --decode --emit-cpp Device.cpp
-
-# 5. (optional) verify the decoded spec by replaying it - vendor app CLOSED first:
-python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>"          # dry-run
-python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>" --write --yes
-```
-
 ## Architecture
 
 ```
@@ -136,39 +196,47 @@ python -m lumascope.cli replay --spec <decoded>.json --device-path "<path>" --wr
 - **`capture/`** - `frida_backend` spawns/attaches a process and injects `agent.js` to hook
   `WriteFile` / `DeviceIoControl` / `HidD_*` / `WinUsb_*` (with handle->VID:PID correlation and a
   binary channel); `usbpcap_backend` parses `tshark -T json` from a USBPcap bus capture. Both emit
-  a common `CaptureFrame`. `serialize` defines the on-disk frame/corpus JSON.
+  a common `CaptureFrame`. `serialize` defines the on-disk formats and identifies them by content.
 - **`decode/`** - passes over a labeled `Corpus`: `chunked` reassembles streamed protocols first;
   `diff` localizes fields + recovers scaling; `stride` recovers layout/stride/channel-order;
   `checksum` recovers sum/xor/CRC; `encoding` finds brightness; `spec` assembles and validates by
   re-encoding every frame byte-for-byte.
+- **`view.py` / `annotate.py`** - the reader-facing half: `annotate` turns an inferred framing or a
+  decoded spec into a per-byte field map, and `view` renders it as annotated, colour-coded hex.
 - **`stimulus/`** - `matrix` generates the one-thing-at-a-time sweep; `manual` (operator-guided)
   and `openrgb` drivers apply each step; `sync` windows the capture.
 - **`emit/`** - `spec_json` (canonical JSON) and `openrgb_cpp` (a drop-in `RGBController` skeleton).
+- **`devices.py`** - read-only HID enumeration (pure ctypes) + vendor-process detection.
 
 ## Layout
 
 ```
 lumascope/
-  cli.py            doctor|selftest|demo|capture|sweep|decode|reassemble|inspect|cadence|emit|replay
+  cli.py            the command line; grouped help, guided errors
   model.py          CaptureFrame, SweepStep, Corpus, ProtocolSpec dataclasses
   codec.py          reference encoder: spec + colors -> wire bytes
+  view.py           annotated hex dumps, colour swatches, LED tables
+  annotate.py       framing/spec -> per-byte field maps
+  devices.py        HID device + vendor-process discovery
+  errors.py         user-facing errors with a suggested fix
   synthetic.py      generate labeled captures from a known spec (no hardware)
   examples.py       built-in ground-truth specs for selftest/tests
-  doctor.py         environment check
+  doctor.py         environment check, reported as capabilities
   orchestrate.py    drive -> capture -> pair -> Corpus
   replay.py         safety-gated device-write verification
   capture/          base, agent.js, frida_backend, usbpcap_backend, serialize
   stimulus/         base, manual, openrgb_driver, matrix, sync
   decode/           diff, stride, checksum, encoding, spec, chunked, inspect, cadence
   emit/             spec_json, openrgb_cpp
-tests/              decode/emit/orchestrate/chunked/replay/usbpcap + frida capture (skips off-Windows)
+samples/            real ASUS Aura captures - the zero-hardware starting point
+tests/              decode/emit/orchestrate/chunked/replay/usbpcap/view + frida capture
 docs/               asus-aura-pid19af-protocol.md  (worked example)
 ```
 
 ## Development
 
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev]"
 pytest -q                 # full suite; capture tests skip without Windows + frida
 ```
 
@@ -177,13 +245,19 @@ native deps. The Frida capture tests require Windows + `frida`; they `skip` clea
 CI on Linux exercises decode/emit/chunked/orchestrate/replay/parser). CI runs `pytest` on each
 push (`.github/workflows/tests.yml`).
 
+Terminal output honours `NO_COLOR` / `FORCE_COLOR`, and every rendering command takes
+`--color auto|always|never`. Set `LUMASCOPE_NO_HINTS=1` to silence the "Next:" suggestions.
+Hints and progress notes go to stderr, so piping stdout stays machine-readable.
+
 ## Safety
 
 Capture-only / passive by default - the tool never issues device writes during research, and
 **never auto-probes SMBus addresses** (blind SMBus access has bricked real boards: Gigabyte Z390,
 MSI Mystic Light). The `replay` command is the only writer: it is **dry-run by default**, a real
-write requires explicit `--write --yes`, and it must be run with the vendor app/service **closed**
-(they hold an exclusive device handle, and concurrent access is the brick risk).
+write requires explicit `--write --yes`, and LumaScope actively checks for a running vendor
+lighting app and refuses to write while one is detected (override with `--force` only if you are
+certain it does not own the device). Vendor apps hold an exclusive device handle, and concurrent
+access is the brick risk.
 
 ## License
 

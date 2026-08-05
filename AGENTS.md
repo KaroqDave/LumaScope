@@ -2,12 +2,13 @@
 
 ## Project Structure & Module Organization
 
-LumaScope is a pure-Python RGB protocol reverse-engineering harness. Source lives in `lumascope/`: `capture/` records Frida or USBPcap traffic, `decode/` infers protocol structure, `stimulus/` drives device state, `emit/` renders specs/C++ skeletons, and `cli.py` exposes commands. Tests live in `tests/`, with fixtures under `tests/fixtures/`. Real capture artifacts such as `*.jsonl` and `*.pcapng` may appear at the repo root; treat them as research data, not library code. Protocol notes and worked examples belong in `docs/`.
+LumaScope is a pure-Python RGB protocol reverse-engineering harness. Source lives in `lumascope/`: `capture/` records Frida or USBPcap traffic, `decode/` infers protocol structure, `stimulus/` drives device state, `emit/` renders specs/C++ skeletons, `view.py`/`annotate.py` render captured bytes as annotated hex, `devices.py` discovers hardware, and `cli.py` exposes commands. Tests live in `tests/`, with fixtures under `tests/fixtures/`. Committed demo captures live in `samples/` and are referenced by the README quickstart — keep them working. Real capture artifacts such as `*.jsonl` and `*.pcapng` may appear at the repo root; treat them as research data, not library code. Protocol notes and worked examples belong in `docs/`.
 
 ## Build, Test, and Development Commands
 
-- `python -m lumascope.cli doctor`: report available optional tooling.
-- `python -m lumascope.cli selftest`: run the stdlib-only decode round-trip examples.
+- `lumascope doctor` (or `python -m lumascope.cli doctor`): report available optional tooling.
+- `lumascope selftest`: run the stdlib-only decode round-trip examples.
+- `lumascope show --frames samples/aura-red.frames.jsonl`: check the annotated-dump rendering.
 - `python -m pytest -q`: run the full test suite; Windows/Frida-specific tests skip when unavailable.
 - `python -m compileall -q lumascope tests`: syntax/import sanity check without running tests.
 - `pip install -e .[dev]`: install the package locally with pytest.
@@ -16,6 +17,8 @@ LumaScope is a pure-Python RGB protocol reverse-engineering harness. Source live
 ## Coding Style & Naming Conventions
 
 Use Python 3.10+ syntax, four-space indentation, type hints, dataclasses for shared models, and short module-level docstrings. Keep core decode logic stdlib-only. Prefer explicit converters for JSON formats instead of broad `asdict()` dumps when stable on-disk shape matters. Names should be descriptive and snake_case for functions, variables, and modules; classes use PascalCase.
+
+User-facing output is part of the product. Terminal output must be pure ASCII by default (legacy Windows consoles) with colour only via `lumascope.view`, which honours `NO_COLOR`/`FORCE_COLOR` and `--color`. Anything a user can get wrong should raise `LumaScopeError` with a suggested command rather than a traceback; commentary and "Next:" hints go to stderr so stdout stays machine-readable.
 
 ## Testing Guidelines
 
