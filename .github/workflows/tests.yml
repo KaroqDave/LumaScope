@@ -6,20 +6,52 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Windows is the primary target: HID/WinUSB capture, USBPcap, device enumeration and
+    # replay are all Windows-only paths, and a Linux-only matrix exercises none of them.
+    # Ubuntu still runs, because the decode/emit engine is meant to be portable.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Install (dev extras)
-        run: python -m pip install -e .[dev]
+        run: python -m pip install -e ".[dev]"
+
+      # Frida is Windows-only here and pulls a native wheel. Installing it is the point of
+      # the Windows job: without it the in-process capture tests skip and the backend the
+      # README recommends first goes untested.
+      - name: Install Frida (Windows)
+        if: runner.os == 'Windows'
+        run: python -m pip install -e ".[frida]"
+
+      # Cheap diagnostics: when a Windows job behaves oddly, the first question is always
+      # which optional pieces were actually present.
+      - name: Environment report
+        run: lumascope doctor --verbose
+
       - name: Run tests
-        # The decode/emit/chunked/orchestrate/replay/parser tests are pure stdlib and run
-        # everywhere; the Frida HID/WinUSB capture tests skip cleanly off Windows / without frida.
-        run: pytest -q
+        run: pytest -q -rs
+
+      # The newcomer path from the README, run against a clean install: the console script
+      # resolves, the bundled samples parse, and the annotated renderer produces output.
+      #
+      # shell: bash on both platforms deliberately. GitHub's pwsh wrapper only propagates
+      # the *last* command's exit code, so on Windows a failure in any earlier line here
+      # would pass silently; bash runs with `set -e`.
+      - name: Smoke-test the documented quickstart
+        shell: bash
+        run: |
+          lumascope selftest
+          lumascope show --frames samples/aura-red.frames.jsonl --limit 1 --color never
+          lumascope show --example gamma --color never
+          lumascope analyze --frames samples/aura-red.frames.jsonl --color never

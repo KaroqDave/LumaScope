@@ -65,9 +65,24 @@ def test_report_off_windows_explains_the_alternative():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="needs the Windows HID stack")
-def test_enumeration_returns_devices_on_windows():
-    """Guards the 64-bit handle bug: without explicit ctypes argtypes this raised
-    'int too long to convert' and silently reported no devices at all."""
-    found = devices.list_devices()
-    assert found, "expected at least one HID device on a Windows machine"
+def test_hid_enumeration_completes_without_raising():
+    """The regression guard for the 64-bit handle bug.
+
+    Without explicit ctypes argtypes, SetupAPI handles were truncated to 32 bits and the
+    walk raised "int too long to convert". Call the raw enumerator rather than
+    `list_devices`, which swallows exceptions and would report the failure as an empty
+    list -- exactly how the bug hid the first time.
+
+    Deliberately does not assert that any device was found: a CI VM may expose no HID
+    hardware at all, and the point here is that the API walk itself completes.
+    """
+    found = devices._enumerate_windows()
+    assert isinstance(found, list)
     assert all(dev.path for dev in found)
+    assert all(dev.vid is None or 0 <= dev.vid <= 0xFFFF for dev in found)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="needs the Windows HID stack")
+def test_list_devices_is_sorted_by_score():
+    scores = [dev.score for dev in devices.list_devices()]
+    assert scores == sorted(scores, reverse=True)
