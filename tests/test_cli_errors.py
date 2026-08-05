@@ -147,24 +147,30 @@ def test_frida_extra_holds_python_310_below_v17():
     Without the marker, `pip install -e ".[frida]"` on 3.10 succeeds and produces a
     capture backend that raises on import -- the README's first-choice backend, broken
     on a Python version pyproject claims to support.
+
+    Reads the built distribution metadata rather than pyproject.toml, both because that is
+    what pip actually resolves and because `tomllib` is 3.11+ -- parsing the source here
+    would reintroduce the very version assumption under test.
     """
-    import tomllib
-    from pathlib import Path
+    from importlib.metadata import metadata
 
     from packaging.requirements import Requirement
 
-    root = Path(__file__).parent.parent
-    meta = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    assert meta["project"]["requires-python"] == ">=3.10"
+    dist = metadata("lumascope")
+    assert dist["Requires-Python"] == ">=3.10"
 
     for extra in ("frida", "all"):
-        reqs = [Requirement(r) for r in meta["project"]["optional-dependencies"][extra]]
-        frida = [r for r in reqs if r.name == "frida"]
-        on_310 = [r for r in frida if r.marker is None or r.marker.evaluate({"python_version": "3.10"})]
-        assert on_310, extra
-        assert all("17" in str(r.specifier) for r in on_310), (extra, [str(r) for r in on_310])
-        assert all(r.specifier.contains("16.7.19") for r in on_310), extra
-        assert not any(r.specifier.contains("17.0.0") for r in on_310), extra
+        on_310 = []
+        for raw in dist.get_all("Requires-Dist") or []:
+            req = Requirement(raw)
+            if req.name != "frida" or req.marker is None:
+                continue
+            if req.marker.evaluate({"python_version": "3.10", "extra": extra}):
+                on_310.append(req)
+        assert on_310, f"no frida requirement selected for extra {extra!r} on 3.10"
+        for req in on_310:
+            assert req.specifier.contains("16.7.19"), (extra, str(req))
+            assert not req.specifier.contains("17.0.0"), (extra, str(req))
 
 
 def test_broken_frida_is_reported_differently_from_a_missing_one(monkeypatch):
