@@ -53,29 +53,58 @@ def analyze_frames(
     return Analysis(groups=groups, framing=framing, channels=channels, cadence=cadence)
 
 
-def format_analysis(report: Analysis, *, name: str = "capture") -> str:
-    """Render an analysis report suitable for stdout or a Markdown file."""
+def format_analysis(report: Analysis, *, name: str = "capture", color: bool = False,
+                    width: int = 16) -> str:
+    """Render an analysis report suitable for stdout or a Markdown file.
+
+    Each section leads with plain English and follows with the exact numbers, so the
+    report is readable by someone meeting the protocol for the first time and still
+    precise enough to implement from.
+    """
+    from .annotate import describe_framing
+    from . import view
+
     lines = [f"# LumaScope analysis: {name}", ""]
     lines.append("## Command classes")
-    lines.append(ins.format_groups(report.groups) if report.groups else "No matching command classes.")
+    lines.append("")
+    if report.groups:
+        lines.append("Packets grouped by their leading command bytes. `^^` marks the byte")
+        lines.append("columns that change between packets of the same class.")
+        lines.append("")
+        lines.append(ins.format_groups(report.groups, color=color, width=width))
+    else:
+        lines.append("No matching command classes.")
     lines.append("")
 
     lines.append("## Chunking")
+    lines.append("")
     if report.framing is None:
-        lines.append("No chunked command class detected.")
+        lines.append("No chunked command class detected -- this device does not appear to")
+        lines.append("stream one lighting state across multiple packets.")
     else:
         fr = report.framing
+        lines.append("This device streams one lighting state across many packets.")
+        lines.append("")
+        lines.append(describe_framing(fr))
+        lines.append("")
         lines.append(
             f"prefix={fr.prefix.hex()} channel@{fr.channel_pos}(mask {fr.channel_mask:#x}) "
             f"offset@{fr.offset_pos} count@{fr.count_pos} payload@{fr.payload_start} "
             f"unit={fr.unit} chunk_count={fr.chunk_count} final_flag={fr.final_flag:#x}"
         )
+        lines.append("")
+        lines.append("Reassembled buffers:")
         for ch in sorted(report.channels):
             buf = report.channels[ch]
-            preview = " ".join(buf[i:i + 3].hex() for i in range(0, min(len(buf), 12), 3))
-            lines.append(f"- channel {ch}: {len(buf)} bytes (~{len(buf)//3} LEDs) [{preview}]")
+            lines.append(f"- channel {ch}: {len(buf)} bytes (~{len(buf)//3} LEDs)")
+            bar = view.color_bar(buf, color=color, cells=48)
+            if bar:
+                lines.append(f"    {bar}")
+            lines.append(view.led_table(buf, color=color, indent="    ", max_runs=6))
     lines.append("")
 
     lines.append("## Cadence")
-    lines.append(format_cadence(report.cadence, name=name) if report.cadence else "No cadence signal detected.")
+    lines.append("")
+    lines.append(format_cadence(report.cadence, name=name) if report.cadence
+                 else "No cadence signal detected (needs timestamps and a changing buffer).")
     return "\n".join(lines)

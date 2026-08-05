@@ -110,12 +110,19 @@ class ColumnDiff:
 
 @dataclass
 class GroupDiff:
-    """Per-command-class comparison of two captures."""
+    """Per-command-class comparison of two captures.
+
+    ``rep_a``/``rep_b`` keep each side's representative packet so the result can be
+    rendered as a real side-by-side dump, not just a list of column indices.
+    """
 
     signature: tuple[int, ...]
     in_a: bool
     in_b: bool
     changed: list[ColumnDiff]
+    rep_a: bytes = b""
+    rep_b: bytes = b""
+    framing: object = None  # Optional[ChunkFraming], if this class is a chunked stream
 
     @property
     def shared(self) -> bool:
@@ -150,7 +157,13 @@ def diff_captures(
                 av, bv = ga[sig].column_values(i), gb[sig].column_values(i)
                 if av != bv:
                     changed.append(ColumnDiff(index=i, a_values=av, b_values=bv))
-        out.append(GroupDiff(signature=sig, in_a=in_a, in_b=in_b, changed=changed))
+        from .chunked import infer_framing
+        out.append(GroupDiff(
+            signature=sig, in_a=in_a, in_b=in_b, changed=changed,
+            rep_a=ga[sig].representative if in_a else b"",
+            rep_b=gb[sig].representative if in_b else b"",
+            framing=infer_framing(ga[sig].frames) if in_a else None,
+        ))
     return out
 
 
@@ -178,36 +191,91 @@ def compress_columns(cols: list[int]) -> str:
     return ",".join(runs)
 
 
-def _hex_capped(data: bytes, cap: int = 24) -> str:
-    head = data[:cap].hex(" ")
-    return head + (" …" if len(data) > cap else "")
+_DIFF_COLUMN_CAP = 12
+_VALUE_CAP = 6
 
 
-def format_groups(groups: list[CommandGroup]) -> str:
+def _values(values: list[int]) -> str:
+    """A byte-value set, capped. A streamed effect can put 200 values in one column, and
+    printing them all buries the finding."""
+    shown = " ".join(f"{v:02x}" for v in values[:_VALUE_CAP])
+    if len(values) > _VALUE_CAP:
+        shown += f" ... ({len(values)} distinct)"
+    return shown
+
+
+def _fields_for(frames: list[CaptureFrame], packet: bytes):
+    """Best available field map for a command class: whatever framing it reveals."""
+    from ..annotate import fields_from_framing
+    from .chunked import infer_framing
+
+    framing = infer_framing(frames)
+    if framing is not None and framing.matches(packet):
+        return fields_from_framing(framing, packet)
+    return None
+
+
+def format_groups(groups: list[CommandGroup], *, color: bool = False, width: int = 16,
+                  annotate: bool = True) -> str:
+    """Render each command class as an annotated dump of its representative packet.
+
+    Columns that vary *within* the class are marked, which is what tells you where the
+    per-packet variables (chunk offset, last-chunk flag, colour) live.
+    """
+    from ..view import BOLD, RESET, render_packet
+
     total = sum(g.count for g in groups)
-    lines = [f"# {total} frame(s) in {len(groups)} command class(es)"]
+    lines = [f"# {total} packet(s) in {len(groups)} command class(es)"]
     for g in groups:
-        lines.append(
-            f"  {_sig_str(g.signature):8} x{g.count:5}  len {g.width:<4} "
-            f"vary [{compress_columns(g.varying_columns())}]"
-        )
-        lines.append(f"           rep: {_hex_capped(g.representative)}")
+        rep = g.representative
+        vary = g.varying_columns()
+        fmap = _fields_for(g.frames, rep) if annotate else None
+        head = (f"{_sig_str(g.signature)}  --  {g.count} packet(s), "
+                f"{g.width} bytes each")
+        lines.append("")
+        lines.append((BOLD + head + RESET) if color else head)
+        lines.append(render_packet(rep, fields=fmap, vary=vary, color=color,
+                                   width=width, table=bool(fmap)))
+        lines.append(f"  varies within this class: [{compress_columns(vary)}]"
+                     "   (^^ above; constant everywhere else)")
     return "\n".join(lines)
 
 
-def format_diff(diffs: list[GroupDiff], a_name: str, b_name: str) -> str:
-    lines = [f"# diff  A={a_name}  B={b_name}"]
+def format_diff(diffs: list[GroupDiff], a_name: str, b_name: str, *,
+                color: bool = False, width: int = 16) -> str:
+    """Render a two-capture diff as stacked packets with the moved bytes marked.
+
+    Only columns whose value set differs are marked, so structure that is invariant
+    between the runs cancels out and what remains is the field you varied.
+    """
+    from ..view import BOLD, RESET, compare
+
+    lines = [f"# diff   A = {a_name}", f"#        B = {b_name}"]
     for d in diffs:
+        head = _sig_str(d.signature)
         if not d.shared:
-            where = "A only" if d.in_a else "B only"
-            lines.append(f"  {_sig_str(d.signature):8} [{where}]")
+            where = "only in A" if d.in_a else "only in B"
+            lines.append("")
+            lines.append(f"{head}  --  {where}")
             continue
         if not d.changed:
-            lines.append(f"  {_sig_str(d.signature):8} unchanged")
+            lines.append("")
+            lines.append(f"{head}  --  unchanged between the two captures")
             continue
-        lines.append(f"  {_sig_str(d.signature):8} {len(d.changed)} changed column(s):")
-        for c in d.changed:
-            av = " ".join(f"{v:02x}" for v in c.a_values)
-            bv = " ".join(f"{v:02x}" for v in c.b_values)
-            lines.append(f"      [{c.index:>3}]  A: {av:<20}  B: {bv}")
+        title = f"{head}  --  {len(d.changed)} byte column(s) changed"
+        lines.append("")
+        lines.append((BOLD + title + RESET) if color else title)
+        fmap = None
+        if d.framing is not None and d.framing.matches(d.rep_a):
+            from ..annotate import fields_from_framing
+            fmap = fields_from_framing(d.framing, d.rep_a)
+        lines.append(compare(d.rep_a, d.rep_b, a_label="A", b_label="B",
+                             width=width, color=color, fields=fmap))
+        lines.append("")
+        lines.append(f"  changed columns: [{compress_columns([c.index for c in d.changed])}]")
+        for c in d.changed[:_DIFF_COLUMN_CAP]:
+            lines.append(f"  byte {c.index:>3}:  A = {_values(c.a_values):<34}"
+                         f"  B = {_values(c.b_values)}")
+        if len(d.changed) > _DIFF_COLUMN_CAP:
+            lines.append(f"  ... and {len(d.changed) - _DIFF_COLUMN_CAP} more changed column(s)")
     return "\n".join(lines)

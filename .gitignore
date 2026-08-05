@@ -17,7 +17,7 @@ venv/
 Thumbs.db
 
 # Capture artifacts — device-specific research dumps; reproduce with `lumascope capture`.
-# (Committed test fixtures live in tests/fixtures/*.json and are NOT ignored.)
+# (Committed fixtures live in tests/fixtures/ and samples/, and are NOT ignored.)
 /*.jsonl
 *.pcap
 *.pcapng

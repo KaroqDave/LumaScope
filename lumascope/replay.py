@@ -24,6 +24,17 @@ from . import codec
 from .model import Color, ProtocolSpec
 
 
+def vendor_apps_running() -> list[str]:
+    """Vendor lighting apps currently running.
+
+    The documented rule -- close the vendor app before writing -- is easy to forget, and
+    forgetting it is the one mistake that actually risks hardware. So we check instead of
+    only warning in prose.
+    """
+    from .devices import vendor_processes
+    return [name for name, _desc in vendor_processes()]
+
+
 @dataclass
 class ReplayStep:
     label: str
