@@ -4,6 +4,43 @@ All notable changes to LumaScope are recorded here. Versions follow
 [semantic versioning](https://semver.org/); while the project is pre-1.0 the CLI surface
 may still change between minor releases.
 
+## [0.2.1] — 2026-08-06
+
+First release verified against live hardware: Frida attached to SignalRGB driving an ASUS
+Aura controller (`0B05:19AF`), 75,627 frames in 15 seconds, of which 1,338 were the
+`EC 40` colour stream. Capture, command-class grouping, chunk reassembly, colour buffers
+and cadence were all confirmed end to end on a physical device.
+
+That run found three bugs. None of them could have been caught by the bundled samples,
+which are single-device captures with near-uniform chunk sizes.
+
+### Fixed
+
+- **Chunk framing was not inferred on devices whose channels differ in length.** Each
+  channel ends in a short final chunk, so the count column holds a mix (20/8/4 on the
+  test device) and the *modal* count is a partial chunk that no offset stride can match —
+  a device that plainly streams inferred nothing at all. The chunk size is the stride
+  between chunks, so the maximum is now considered alongside the mode.
+
+  Accepting the maximum is guarded: without it, one non-zero outlier in an unrelated
+  column can define a chunk size and make a single-packet protocol decode as chunked. A
+  count column is positive throughout in any real stream, so a mostly-zero column is
+  rejected. Checked against every example spec at every prefix length and both sweep
+  profiles, with no false positives.
+- **Chunk analysis silently targeted the wrong device on a busy host.** It runs on the
+  largest command class present, which is often not the one you care about; the report
+  then said "not chunked" about a device that streams. It was also unfixable from the
+  command line, because `--vid`/`--pid` can only filter frames whose VID:PID resolved,
+  and some applications write through driver handles the capture hook never observes
+  being opened — leaving every frame unidentified.
+
+### Added
+
+- **`--command HEX`** on `analyze`, `inspect`, `show`, `reassemble` and `cadence`, to
+  select a command class by its leading bytes. Prefer it over `--vid`/`--pid` when a
+  capture could not resolve VID:PID. When chunk analysis finds nothing, the report now
+  lists the command classes actually present instead of reporting a bare negative.
+
 ## [0.2.0] — 2026-08-05
 
 The usability release. 0.1.0 worked, but it assumed you already knew how RGB protocol
