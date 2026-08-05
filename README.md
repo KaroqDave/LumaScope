@@ -1,5 +1,12 @@
 # LumaScope
 
+[![Tests](https://github.com/KaroqDave/LumaScope/actions/workflows/tests.yml/badge.svg)](https://github.com/KaroqDave/LumaScope/actions/workflows/tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/KaroqDave/LumaScope?label=release)](https://github.com/KaroqDave/LumaScope/releases/latest)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/KaroqDave/LumaScope#install)
+[![Platforms](https://img.shields.io/badge/engine-Windows%20%7C%20Linux%20%7C%20macOS-blue)](https://github.com/KaroqDave/LumaScope#install)
+[![Capture](https://img.shields.io/badge/live%20capture-Windows-lightgrey)](https://github.com/KaroqDave/LumaScope#reversing-a-real-device-windows)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 **Automated RGB-protocol reverse-engineering harness.**
 
 Adding a vendor RGB device to a control app means knowing its wire protocol. Today that's done
