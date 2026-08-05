@@ -186,3 +186,14 @@ def test_broken_frida_is_reported_differently_from_a_missing_one(monkeypatch):
 
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
     assert "is not installed" in cli._frida_error(ImportError("no module")).render()
+
+
+def test_packaged_version_matches_the_one_the_cli_reports():
+    """pyproject reads the version from lumascope.__init__, so these cannot drift --
+    this pins that wiring, since a stale duplicate would ship a package whose metadata
+    disagrees with `lumascope --version`."""
+    from importlib.metadata import version
+
+    from lumascope import __version__
+
+    assert version("lumascope") == __version__

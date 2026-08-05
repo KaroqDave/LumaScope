@@ -1,6 +1,8 @@
 [project]
 name = "lumascope"
-version = "0.1.0"
+# Single source of truth: lumascope/__init__.py. Duplicating it here lets the packaged
+# version and the one `lumascope --version` prints drift apart.
+dynamic = ["version"]
 description = "Automated RGB protocol reverse-engineering harness for the LumaCore project"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,6 +43,9 @@ lumascope = "lumascope.cli:main"
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = { attr = "lumascope.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]
