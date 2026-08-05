@@ -93,3 +93,52 @@ def test_partial_final_chunks_do_not_become_the_inferred_chunk_size():
     modal_count = Counter(f.data[4] for f in frames).most_common(1)[0][0]
     framing = infer_framing(dominant_command_class(frames))
     assert modal_count != framing.chunk_count
+
+
+# --------------------------------------------------------------------------- #
+# End-to-end on hardware-derived data
+# --------------------------------------------------------------------------- #
+LIVE_CORPUS = FIXTURES / "aura_openrgb_live.corpus.json"
+
+
+def test_decodes_a_corpus_captured_from_real_hardware():
+    """The only decode test whose input came off a physical device.
+
+    Captured by `lumascope sweep --driver openrgb` against an ASUS Aura USB mainboard
+    controller (0B05:19AF), Frida hooking OpenRGB as it applied each state. Every field
+    below independently reproduces docs/asus-aura-pid19af-protocol.md, which was derived
+    from Armoury Crate -- a different host entirely.
+    """
+    from lumascope.capture.serialize import load_corpus
+    from lumascope.decode import decode
+
+    corpus = load_corpus(str(LIVE_CORPUS))
+    assert len(corpus.frames) == 63
+
+    result = decode(corpus, name="aura-live")
+    assert result.validation.ok, result.validation.summary()
+
+    spec = result.spec
+    assert spec.packet_len == 65
+    assert spec.report_id == 0xEC
+    assert spec.leds.count == 2
+    assert spec.leds.layout == "interleaved"
+    assert spec.leds.stride == 3
+    assert spec.leds.channel_order == "RGB"      # the doc's controlled-capture finding
+    assert spec.leds.base_offset == 5            # payload begins after the 5-byte header
+    assert spec.checksum.kind == "none"          # "no checksum observed"
+    assert spec.leds.scaling.type == "identity"
+
+
+def test_live_corpus_reencodes_byte_for_byte():
+    """The strongest statement available: the recovered spec regenerates every packet
+    the hardware actually sent."""
+    from lumascope import codec
+    from lumascope.capture.serialize import load_corpus
+    from lumascope.decode import decode
+
+    corpus = load_corpus(str(LIVE_CORPUS))
+    spec = decode(corpus, name="aura-live").spec
+    for lf in corpus.frames:
+        brightness = lf.step.brightness if lf.step.brightness is not None else 255
+        assert codec.encode_frame(spec, lf.step.colors, brightness=brightness) == lf.frame.data

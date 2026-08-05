@@ -1,0 +1,2528 @@
+{
+ "device_name": "ASUS Aura X870 (OpenRGB-driven, live capture)",
+ "led_count": 2,
+ "vid": null,
+ "pid": null,
+ "frames": [
+  {
+   "step": {
+    "step_id": 0,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 0,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971600061607700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 1,
+    "kind": "per_channel",
+    "colors": [
+     [
+      17,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 17,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971600667510800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 2,
+    "kind": "per_channel",
+    "colors": [
+     [
+      34,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 34,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971601174059300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 3,
+    "kind": "per_channel",
+    "colors": [
+     [
+      51,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 51,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002330000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971601681294000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 4,
+    "kind": "per_channel",
+    "colors": [
+     [
+      68,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 68,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971602210774200,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 5,
+    "kind": "per_channel",
+    "colors": [
+     [
+      85,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 85,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971602737997500,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 6,
+    "kind": "per_channel",
+    "colors": [
+     [
+      102,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 102,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971603247659800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 7,
+    "kind": "per_channel",
+    "colors": [
+     [
+      119,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 119,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971603752082000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 8,
+    "kind": "per_channel",
+    "colors": [
+     [
+      136,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 136,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002880000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971604279684200,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 9,
+    "kind": "per_channel",
+    "colors": [
+     [
+      153,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 153,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971604785758600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 10,
+    "kind": "per_channel",
+    "colors": [
+     [
+      170,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 170,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002aa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971605291838600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 11,
+    "kind": "per_channel",
+    "colors": [
+     [
+      187,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 187,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002bb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971605798008500,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 12,
+    "kind": "per_channel",
+    "colors": [
+     [
+      204,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 204,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002cc0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971606305081300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 13,
+    "kind": "per_channel",
+    "colors": [
+     [
+      221,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 221,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971606811032900,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 14,
+    "kind": "per_channel",
+    "colors": [
+     [
+      238,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 238,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ee0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971607316128400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 15,
+    "kind": "per_channel",
+    "colors": [
+     [
+      255,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "R",
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971607820877400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 16,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 0,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971608328412100,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 17,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      17,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 17,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002001100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971608835491500,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 18,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      34,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 34,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002002200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971609363103100,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 19,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      51,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 51,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002003300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971609870458100,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 20,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      68,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 68,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002004400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971610379202800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 21,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      85,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 85,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002005500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971610887766400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 22,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      102,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 102,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002006600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971611396339300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 23,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      119,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 119,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002007700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971611925861600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 24,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      136,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 136,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002008800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971612432094800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 25,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      153,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 153,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002009900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971612961054500,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 26,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      170,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 170,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200aa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971613470142000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 27,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      187,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 187,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200bb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971613998248100,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 28,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      204,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 204,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200cc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971614527791600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 29,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      221,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 221,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200dd00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971615034304400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 30,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      238,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 238,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200ee00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971615562886700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 31,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      255,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "G",
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200ff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971616069946400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 32,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 0,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971616597610700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 33,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      17
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 17,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000011000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971617127839500,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 34,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      34
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 34,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000022000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971617634958000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 35,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      51
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 51,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000033000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971618142999300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 36,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      68
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 68,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000044000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971618673617300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 37,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      85
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 85,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000055000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971619180666300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 38,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      102
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 102,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000066000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971619688241000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 39,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      119
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 119,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971620196670700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 40,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      136
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 136,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000088000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971620724470200,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 41,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      153
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 153,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000099000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971621230818400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 42,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      170
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 170,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000aa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971621738125800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 43,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      187
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 187,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000bb000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971622247169000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 44,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      204
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 204,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000cc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971622752712800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 45,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      221
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 221,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000dd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971623281069200,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 46,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      238
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 238,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000ee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971623810369300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 47,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      255
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": "B",
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000ff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971624337761200,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 48,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      255,
+      0,
+      0
+     ]
+    ],
+    "led": 1,
+    "channel": "R",
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000000ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971624866343600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 49,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      255,
+      0
+     ]
+    ],
+    "led": 1,
+    "channel": "G",
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec4084000200000000ff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971625373048900,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 50,
+    "kind": "per_channel",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      255
+     ]
+    ],
+    "led": 1,
+    "channel": "B",
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec408400020000000000ff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971625878073700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 51,
+    "kind": "led_walk",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": 0,
+    "channel": null,
+    "value": null,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971626386187700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 52,
+    "kind": "led_walk",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": 1,
+    "channel": null,
+    "value": null,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000000ffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971626894292600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 53,
+    "kind": "uniform",
+    "colors": [
+     [
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": 0,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971627419323400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 54,
+    "kind": "uniform",
+    "colors": [
+     [
+      64,
+      64,
+      64
+     ],
+     [
+      64,
+      64,
+      64
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": 64,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002404040404040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971627928480800,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 55,
+    "kind": "uniform",
+    "colors": [
+     [
+      128,
+      128,
+      128
+     ],
+     [
+      128,
+      128,
+      128
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": 128,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002808080808080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971628458126600,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 56,
+    "kind": "uniform",
+    "colors": [
+     [
+      192,
+      192,
+      192
+     ],
+     [
+      192,
+      192,
+      192
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": 192,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002c0c0c0c0c0c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971628967240100,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 57,
+    "kind": "uniform",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": 255,
+    "brightness": null,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971629476816700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 58,
+    "kind": "brightness",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": null,
+    "brightness": 0,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971629984893200,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 59,
+    "kind": "brightness",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": null,
+    "brightness": 64,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971630510944700,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 60,
+    "kind": "brightness",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": null,
+    "brightness": 128,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971631017916000,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 61,
+    "kind": "brightness",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": null,
+    "brightness": 192,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971631527043400,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  },
+  {
+   "step": {
+    "step_id": 62,
+    "kind": "brightness",
+    "colors": [
+     [
+      255,
+      255,
+      255
+     ],
+     [
+      255,
+      255,
+      255
+     ]
+    ],
+    "led": null,
+    "channel": null,
+    "value": null,
+    "brightness": 255,
+    "mode": null,
+    "params": {}
+   },
+   "frame": {
+    "hex": "ec40840002ffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_ns": 1785971632038368300,
+    "source": "frida",
+    "api": "WriteFile",
+    "direction": "out",
+    "transfer": "output",
+    "vid": null,
+    "pid": null,
+    "path": null,
+    "report_id": 236,
+    "endpoint": null,
+    "meta": {
+     "handle": "0x43c"
+    }
+   }
+  }
+ ]
+}

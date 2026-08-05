@@ -55,6 +55,9 @@ VENDOR_PROCESSES = {
     "nzxt cam.exe": "NZXT CAM",
     "lghub_agent.exe": "Logitech G HUB agent",
     "signalrgb.exe": "SignalRGB",
+    # Closing the SignalRGB window leaves this service running, and it keeps the device.
+    # Matching only the GUI let `replay --write` proceed while lighting was still driven.
+    "signalrgbservice.exe": "SignalRGB background service",
     "openrgb.exe": "OpenRGB",
     "steelseriesengine.exe": "SteelSeries Engine",
 }

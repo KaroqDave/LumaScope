@@ -26,14 +26,29 @@ from .stimulus.manual import SweepAborted
 from .stimulus.sync import collect_until_quiet
 
 
-def _representative(frames: list[CaptureFrame], modal_len: Optional[int]) -> Optional[CaptureFrame]:
-    """Pick the one frame that best represents a step: the last outbound write of the modal
-    packet length (falls back to the last outbound write of any length)."""
+def _representative(
+    frames: list[CaptureFrame],
+    modal_len: Optional[int],
+    boilerplate: frozenset[bytes] = frozenset(),
+) -> Optional[CaptureFrame]:
+    """Pick the one frame that best represents a step.
+
+    The last outbound write of the modal packet length, skipping any packet in
+    ``boilerplate`` -- byte patterns a host repeats identically in every step.
+
+    Skipping those matters: a host that writes each zone separately finishes an update
+    with empty applies for the zones it has no LEDs in. Those are the *last* writes of
+    the modal length, so a naive "take the last one" rule labels every step with an
+    all-zero payload and the whole corpus decodes to nothing.
+    """
     out = [f for f in frames if f.direction == "out" and len(f.data) > 0]
     if not out:
         return None
     if modal_len is not None:
         same = [f for f in out if len(f.data) == modal_len]
+        informative = [f for f in same if bytes(f.data) not in boilerplate]
+        if informative:
+            return informative[-1]
         if same:
             return same[-1]
     return out[-1]
@@ -78,13 +93,39 @@ def _pair_single(
             if f.direction == "out" and len(f.data) > 0:
                 lengths[len(f.data)] += 1
     modal_len = lengths.most_common(1)[0][0] if lengths else None
+    boilerplate = _boilerplate(raw, modal_len)
 
     labeled: list[LabeledFrame] = []
     for step, frames in raw:
-        rep = _representative(frames, modal_len)
+        rep = _representative(frames, modal_len, boilerplate)
         if rep is not None:
             labeled.append(LabeledFrame(step=step, frame=rep))
     return Corpus(frames=labeled, led_count=led_count, device_name=device_name, vid=vid, pid=pid)
+
+
+def _boilerplate(
+    raw: list[tuple[SweepStep, list[CaptureFrame]]],
+    modal_len: Optional[int],
+    threshold: float = 0.9,
+) -> frozenset[bytes]:
+    """Byte patterns a host emits identically in nearly every step.
+
+    Pairing exists to correlate captured bytes with the state that produced them, so a
+    packet that is byte-identical across the whole sweep cannot be the one carrying the
+    state -- it is an apply, a keepalive, or a write to a zone with nothing in it.
+    Identifying them lets :func:`_representative` skip past to the packet that varies.
+
+    Needs at least three steps to tell "constant" from "we only have two samples".
+    """
+    if len(raw) < 3:
+        return frozenset()
+    seen: Counter[bytes] = Counter()
+    for _step, frames in raw:
+        unique = {bytes(f.data) for f in frames
+                  if f.direction == "out" and (modal_len is None or len(f.data) == modal_len)}
+        seen.update(unique)
+    cutoff = len(raw) * threshold
+    return frozenset(data for data, n in seen.items() if n >= cutoff)
 
 
 def _detect_framing(raw: list[tuple[SweepStep, list[CaptureFrame]]]) -> Optional[ChunkFraming]:

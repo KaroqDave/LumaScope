@@ -216,3 +216,59 @@ def test_driver_teardown_runs_when_a_step_fails():
         raise AssertionError("step failure should propagate")
     assert driver.setup_called
     assert driver.teardown_called
+
+
+# --------------------------------------------------------------------------- #
+# Boilerplate packets (found on live hardware)
+# --------------------------------------------------------------------------- #
+def _zone_writing_host(step_colors):
+    """A host that writes each zone separately and finishes with empty applies.
+
+    OpenRGB driving an ASUS Aura controller does exactly this: the colour goes out
+    first, then one zero-length apply per addressable zone that has no LEDs in it. Those
+    applies are the *last* writes of the modal length, so "take the last one" pairs every
+    step with an all-zero payload.
+    """
+    frames = []
+    r, g, b = step_colors
+    frames.append(CaptureFrame(data=bytes([0xEC, 0x40, 0x84, 0x00, 0x02, r, g, b] + [0] * 57),
+                               direction="out"))
+    for zone in (0x80, 0x81, 0x82):
+        frames.append(CaptureFrame(data=bytes([0xEC, 0x40, zone, 0x00, 0x00] + [0] * 60),
+                                   direction="out"))
+    return frames
+
+
+def test_pairing_skips_packets_repeated_identically_in_every_step():
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 128, 255)]
+    raw = [
+        (SweepStep(step_id=i, kind=KIND_UNIFORM, colors=[c], value=c[0]), _zone_writing_host(c))
+        for i, c in enumerate(colors)
+    ]
+    corpus = orchestrate.pair(raw, led_count=1, chunked=False)
+
+    assert len(corpus.frames) == len(colors)
+    for lf, c in zip(corpus.frames, colors):
+        # The colour packet, not one of the empty applies.
+        assert lf.frame.data[4] == 0x02, lf.frame.data[:6].hex(" ")
+        assert tuple(lf.frame.data[5:8]) == c
+
+
+def test_boilerplate_detection_needs_enough_steps_to_be_meaningful():
+    """With two steps everything looks constant; refuse to guess."""
+    raw = [
+        (SweepStep(step_id=i, kind=KIND_UNIFORM, colors=[c], value=c[0]), _zone_writing_host(c))
+        for i, c in enumerate([(255, 0, 0), (0, 255, 0)])
+    ]
+    assert orchestrate._boilerplate(raw, modal_len=65) == frozenset()
+
+
+def test_pairing_falls_back_when_every_packet_is_boilerplate():
+    """A device whose writes never vary must still yield a frame per step, not nothing."""
+    same = (7, 7, 7)
+    raw = [
+        (SweepStep(step_id=i, kind=KIND_UNIFORM, colors=[same], value=7), _zone_writing_host(same))
+        for i in range(4)
+    ]
+    corpus = orchestrate.pair(raw, led_count=1, chunked=False)
+    assert len(corpus.frames) == 4
