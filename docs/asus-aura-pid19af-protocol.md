@@ -32,17 +32,20 @@ offset  field            value / meaning
 ------  ---------------  ------------------------------------------------------------
   0     report id        0xEC
   1     command          0x40   (direct LED color)
-  2     channel | flag   low bits = channel index (0,1,2 = three zones/headers);
+  2     channel | flag   low bits = channel index (0,1,2 = zones/headers; 4 = small zone);
                          bit 7 (0x80) set = LAST chunk for this channel
-  3     LED offset       start LED index for this chunk, in LEDs (0,20,40,60,80,100)
-  4     LED count        LEDs in this packet, in LEDs (0x14 = 20; payload = count*3 bytes)
+  3     LED offset       start LED index for this chunk, in LEDs (0,20,40,... in steps of 20)
+  4     LED count        LEDs in this packet (0x14 = 20 for a full chunk; payload = count*3
+                         bytes). The FINAL chunk of a channel is short when that channel's
+                         length is not a multiple of 20 - see "Channel lengths" below.
   5..   color data       RGB, 3 bytes per LED  (wire order = Red, Green, Blue)
 ```
 
-A full channel update streams 20-LED chunks (60 bytes each) at increasing LED offsets; the
-packet that writes the final chunk has **bit 7 set** in byte 2 (apply-on-last). Channels 0/1/2
-are the three 120-LED addressable headers; **channel 4** (`0x84 = 0x80 | 0x04`) is a small
-**2-LED zone** written at the end of each update:
+A channel update streams 20-LED chunks (60 bytes each) at increasing LED offsets; the packet
+that writes the final chunk has **bit 7 set** in byte 2 (apply-on-last). Channels 0/1/2 are
+addressable headers and **channel 4** (`0x84 = 0x80 | 0x04`) is a small zone written at the end
+of each update. In the Armoury Crate captures below the headers carry 120 LEDs each and channel
+4 carries 2, but **those lengths are configuration, not protocol** - see "Channel lengths":
 
 ```
 EC 40 84 00 02 ...        (channel 4, 2 LEDs, apply bit set - closes the update)
@@ -57,8 +60,9 @@ EC 40 84 00 02 ...        (channel 4, 2 LEDs, apply bit set - closes the update)
   red -> wire triplet `ff 00 00`, i.e. red in position 0). NOTE: an earlier *passive* red->green->blue
   capture led me to wrongly conclude GRB; the controlled single-variable test corrected it. Always
   vary one thing at a time.
-- **Offset/count are in LEDs, not bytes** (payload = count*3). 3 channels, up to ~120 LEDs each
-  (max offset 100 + 20 = 120 LEDs = 360 bytes).
+- **Offset/count are in LEDs, not bytes** (payload = count*3). Up to 3 addressable channels
+  plus channel 4; each channel's length is whatever that machine is configured for, and a
+  120-LED header is 6 full chunks (max offset 100 + 20 = 120 LEDs = 360 bytes).
 - **Checksum:** none observed (direct color writes are raw RGB bytes).
 - **Scaling:** identity at the wire (Armoury Crate applies brightness upstream; full red = 0xFF).
 
@@ -77,6 +81,51 @@ EC 40 00 50 14  ff0000 ...                 (chunk @ LED 80)
 EC 40 80 64 14  ff0000 ...                 (chunk @ LED 100, bit7 = last)
 EC 40 84 00 02  ...                        (channel 4 write, apply bit - closes the update)
 ```
+
+## Channel lengths are configuration, not protocol
+
+Every capture above came from Armoury Crate on a board whose headers were configured for 120
+LEDs. 120 is 6 x 20, so *every* chunk in those captures is exactly 20 LEDs and the count byte
+is effectively constant. That is a property of the configuration, not of `EC 40`.
+
+A second capture of the **same device driven by a different host** (SignalRGB, hooked with
+`lumascope capture --attach signalrgb.exe`) shows the general shape - 1,338 `EC 40` packets
+over a 15.0 s window, ~268 updates:
+
+| channel | chunks `(offset, count)` | total | apply bit |
+|---|---|---|---|
+| 0 | `(0,20) (20,20) (40,8)` | 48 LEDs = 144 bytes | on the `(40,8)` chunk |
+| 1 | `(0,8)`                 | 8 LEDs = 24 bytes   | on its only chunk |
+| 4 | `(0,4)`                 | 4 LEDs = 12 bytes   | on its only chunk |
+
+Three things generalise from this:
+
+- **A channel's final chunk is short** whenever its length is not a multiple of 20. Channel 0
+  ends with an 8-LED chunk. Only a length that divides by 20 produces uniform counts.
+- **Channel 4 is not fixed at 2 LEDs** - here it carries 4. Nor is channel 2 always present;
+  this machine drives 0, 1 and 4 only.
+- **The apply bit is per channel, not per update.** Each channel sets `0x80` on its own last
+  chunk - 268, 268 and 267 times respectively, the odd one out being the update the capture
+  window clipped - so it is that channel's write being closed, not the update as a whole.
+
+Nothing here contradicts the Armoury Crate findings: it is the same command, the same field
+layout, the same apply semantics. What changes is that count is genuinely variable.
+
+### Why this matters when decoding
+
+A decoder that assumes the *most common* count is the chunk size gets this device wrong. Across
+the SignalRGB capture the counts are 20/8/4, and the mode is **8** - a partial chunk that no
+offset stride can ever match, so framing inference finds nothing at all and reports a device
+that plainly streams as "not chunked".
+
+The chunk size is the **stride between consecutive offsets**, which is the *maximum* count, not
+the modal one. LumaScope inferred no framing here until 0.2.1; the file
+`tests/fixtures/aura_ec40_mixed_chunk_sizes.jsonl` is a slice of this capture, kept as the
+regression case.
+
+This is also the argument for capturing from **more than one host application**. Armoury Crate
+alone could not have surfaced it, because its uniform 120-LED configuration hides the variable
+that matters.
 
 ## Armoury Crate drives everything via `EC 40` - there is no native-effect command
 
