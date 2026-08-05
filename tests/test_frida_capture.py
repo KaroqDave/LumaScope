@@ -12,9 +12,24 @@ import sys
 
 import pytest
 
+def _frida_usable() -> bool:
+    """Whether frida can actually be imported, not merely whether it is present.
+
+    An incompatible wheel installs fine and raises on import (frida 17 needs Python
+    3.11), so a `find_spec` guard lets these tests hard-fail instead of skipping.
+    """
+    if importlib.util.find_spec("frida") is None:
+        return False
+    try:
+        import frida  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
 pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="Frida HID/WinUSB capture is Windows-only"),
-    pytest.mark.skipif(importlib.util.find_spec("frida") is None, reason="frida not installed"),
+    pytest.mark.skipif(not _frida_usable(), reason="frida not installed or not importable"),
 ]
 
 HERE = os.path.dirname(os.path.abspath(__file__))

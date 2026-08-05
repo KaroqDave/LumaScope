@@ -107,10 +107,14 @@ def run_checks() -> list[Check]:
 
     # --- capture: in-process hook ---
     frida_v = _module_version("frida")
+    frida_broken = bool(frida_v) and "failed" in frida_v
     checks.append(Check(
-        "frida", OK if frida_v and "failed" not in frida_v else MISSING,
+        "frida", OK if frida_v and not frida_broken else MISSING,
         frida_v or "not installed (native wheel; may lag the newest Python release)",
-        fix='pip install -e ".[frida]"',
+        # An unimportable frida needs a *different* fix from a missing one, and
+        # reinstalling the same extra would just put the same broken wheel back.
+        fix=('pip install "frida<17"   (frida 17 requires Python 3.11+)'
+             if frida_broken else 'pip install -e ".[frida]"'),
         needed_for="capture --backend frida (hook the vendor app from inside)",
     ))
 

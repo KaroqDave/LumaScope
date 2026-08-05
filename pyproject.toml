@@ -13,14 +13,23 @@ authors = [{ name = "LumaCore" }]
 dependencies = []
 
 [project.optional-dependencies]
-frida = ["frida>=16", "frida-tools>=12"]
+# frida 17 does `from typing import NotRequired`, which needs Python 3.11. On 3.10 it
+# installs happily and then fails to import, so the marker holds 3.10 on the 16.x line.
+# Without this, `pip install -e ".[frida]"` on 3.10 yields an unusable capture backend.
+frida = [
+    "frida>=16,<17; python_version < '3.11'",
+    "frida>=16; python_version >= '3.11'",
+    "frida-tools>=12",
+]
 stimulus = ["pywinauto>=0.6.8", "openrgb-python>=0.3", "requests>=2.31"]
 image = ["pyautogui>=0.9.54", "opencv-python>=4.9"]
 checksum = ["crcbeagle>=1.0"]
 usb = ["pyusb>=1.2"]
 dev = ["pytest>=8"]
 all = [
-    "frida>=16", "frida-tools>=12",
+    "frida>=16,<17; python_version < '3.11'",
+    "frida>=16; python_version >= '3.11'",
+    "frida-tools>=12",
     "pywinauto>=0.6.8", "openrgb-python>=0.3", "requests>=2.31",
     "pyautogui>=0.9.54", "opencv-python>=4.9",
     "crcbeagle>=1.0", "pyusb>=1.2", "pytest>=8",

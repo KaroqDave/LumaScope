@@ -231,6 +231,29 @@ def _next(*commands: str) -> None:
 _CONFIRM_ABOVE_STEPS = 80
 
 
+def _frida_error(exc: Exception) -> LumaScopeError:
+    """Tell "frida is missing" apart from "frida is installed but unusable".
+
+    They need different fixes, and the second is easy to hit: frida 17 installs happily on
+    Python 3.10 and then fails to import, so "it is not installed" would be both wrong and
+    unactionable.
+    """
+    import importlib.util
+
+    why = ("Frida hooks the vendor process to record device writes.\n"
+           "The USBPcap backend needs no Python package, only Wireshark + USBPcap.")
+    if importlib.util.find_spec("frida") is None:
+        return MissingDependency("frida", "frida", why=why)
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    return LumaScopeError(
+        f"frida is installed but cannot be imported ({exc})",
+        detail=f"Usually a version mismatch -- frida 17 requires Python 3.11+, and you are\n"
+               f"on Python {version}. Either install the older line, or sniff the bus instead.",
+        commands=['pip install "frida<17"',
+                  "lumascope capture --backend usbpcap --out capture.frames.jsonl"],
+    )
+
+
 def _use_color(args) -> bool:
     from .view import resolve_color
     return resolve_color(getattr(args, "color", "auto"))
@@ -438,12 +461,8 @@ def _cmd_capture(args) -> int:
 
     try:
         frames = backend.capture(duration=duration)
-    except ImportError:
-        raise MissingDependency(
-            "frida", "frida",
-            why="Frida hooks the vendor process to record device writes.\n"
-                "The USBPcap backend needs no Python package, only Wireshark + USBPcap.",
-        ) from None
+    except ImportError as exc:
+        raise _frida_error(exc) from None
     except RuntimeError as exc:
         raise LumaScopeError(f"capture failed: {exc}") from None
 
@@ -519,12 +538,8 @@ def _cmd_sweep(args) -> int:
             log=lambda m: print(f"# {m}", file=sys.stderr),
             checkpoint=checkpoint,
         )
-    except ImportError:
-        raise MissingDependency(
-            "frida", "frida",
-            why="A sweep drives the device and records its traffic at the same time,\n"
-                "which needs the in-process hook.",
-        ) from None
+    except ImportError as exc:
+        raise _frida_error(exc) from None
 
     for level, msg in backend.logs:
         if level in ("error", "warn", "detached"):

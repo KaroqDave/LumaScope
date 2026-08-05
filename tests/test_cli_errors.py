@@ -136,3 +136,47 @@ def test_hints_can_be_silenced(capsys, monkeypatch):
     monkeypatch.setenv("LUMASCOPE_NO_HINTS", "1")
     cli.main(["show", "--frames", str(SAMPLE), "--limit", "1", "--color", "never"])
     assert "Next:" not in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------- #
+# Optional-dependency guidance
+# --------------------------------------------------------------------------- #
+def test_frida_extra_holds_python_310_below_v17():
+    """frida 17 does `from typing import NotRequired`, which needs Python 3.11.
+
+    Without the marker, `pip install -e ".[frida]"` on 3.10 succeeds and produces a
+    capture backend that raises on import -- the README's first-choice backend, broken
+    on a Python version pyproject claims to support.
+    """
+    import tomllib
+    from pathlib import Path
+
+    from packaging.requirements import Requirement
+
+    root = Path(__file__).parent.parent
+    meta = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert meta["project"]["requires-python"] == ">=3.10"
+
+    for extra in ("frida", "all"):
+        reqs = [Requirement(r) for r in meta["project"]["optional-dependencies"][extra]]
+        frida = [r for r in reqs if r.name == "frida"]
+        on_310 = [r for r in frida if r.marker is None or r.marker.evaluate({"python_version": "3.10"})]
+        assert on_310, extra
+        assert all("17" in str(r.specifier) for r in on_310), (extra, [str(r) for r in on_310])
+        assert all(r.specifier.contains("16.7.19") for r in on_310), extra
+        assert not any(r.specifier.contains("17.0.0") for r in on_310), extra
+
+
+def test_broken_frida_is_reported_differently_from_a_missing_one(monkeypatch):
+    """An unimportable frida must not be described as 'not installed' -- reinstalling
+    the same extra would just restore the same broken wheel."""
+    import importlib.util
+
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    err = cli._frida_error(ImportError("cannot import name 'NotRequired'"))
+    rendered = err.render()
+    assert "cannot be imported" in rendered
+    assert 'pip install "frida<17"' in rendered
+
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    assert "is not installed" in cli._frida_error(ImportError("no module")).render()
