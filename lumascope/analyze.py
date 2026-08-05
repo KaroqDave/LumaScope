@@ -79,8 +79,22 @@ def format_analysis(report: Analysis, *, name: str = "capture", color: bool = Fa
     lines.append("## Chunking")
     lines.append("")
     if report.framing is None:
-        lines.append("No chunked command class detected -- this device does not appear to")
-        lines.append("stream one lighting state across multiple packets.")
+        lines.append("No chunked command class detected in the class this targeted.")
+        lines.append("")
+        # Chunk analysis runs on the *largest* command class in the capture. On a busy
+        # host that talks to several devices, that is often not the one you care about,
+        # and reporting only "not chunked" would be a confident false negative.
+        candidates = [g for g in report.groups if g.width >= 5][:5]
+        if candidates:
+            lines.append("It targets the largest command class present. If the device you want is")
+            lines.append("a different one, name it explicitly:")
+            lines.append("")
+            for g in candidates:
+                sig = " ".join(f"{b:02x}" for b in g.signature)
+                lines.append(f"    --command {''.join(f'{b:02x}' for b in g.signature)}"
+                             f"     ({sig}: {g.count} packets, {g.width} bytes each)")
+        else:
+            lines.append("This device does not appear to stream one state across many packets.")
     else:
         fr = report.framing
         lines.append("This device streams one lighting state across many packets.")

@@ -160,6 +160,10 @@ lumascope capture --backend usbpcap --vid 0x0b05 --pid 0x19af \
 lumascope show --frames red.frames.jsonl
 lumascope analyze --frames red.frames.jsonl
 
+#    a busy vendor app talks to several devices at once. `inspect` lists the command
+#    classes present; `--command` points the analysis at the one you care about:
+lumascope analyze --frames red.frames.jsonl --command ec40
+
 # 4. change ONE thing, capture again, and diff to localize the byte that carries it
 lumascope inspect --frames red.frames.jsonl --diff green.frames.jsonl
 

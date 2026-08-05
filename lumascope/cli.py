@@ -142,6 +142,15 @@ STEP 3  --  Look at what you caught
   rendered in its actual colour. `analyze` reports the command classes, the
   chunk framing, and the effect timing in one pass.
 
+  A busy vendor app talks to several devices over the same handles, and chunk
+  analysis targets the largest command class it finds -- which may not be yours.
+  `inspect` lists the classes present; `--command` selects one:
+
+    lumascope analyze --frames red.frames.jsonl --command ec40
+
+  Prefer this over --vid/--pid when the capture could not resolve VID:PID (some
+  apps write through driver handles the hook never sees opened).
+
 
 STEP 4  --  Change one thing, diff it
 
@@ -257,6 +266,47 @@ def _frida_error(exc: Exception) -> LumaScopeError:
 def _use_color(args) -> bool:
     from .view import resolve_color
     return resolve_color(getattr(args, "color", "auto"))
+
+
+def _select(frames, args):
+    """Apply ``--command`` to a loaded capture.
+
+    A real capture is rarely one device. Vendor apps talk to several over the same
+    handles, and when the VID:PID correlation cannot resolve them, `--vid/--pid` have
+    nothing to filter on -- so selecting the command class by its leading bytes is the
+    only way to point the analysis at the protocol you actually care about.
+    """
+    text = getattr(args, "command_filter", None)
+    if not text:
+        return frames
+    cleaned = text.replace(" ", "").replace(":", "").replace("0x", "").lower()
+    try:
+        prefix = bytes.fromhex(cleaned)
+    except ValueError:
+        raise LumaScopeError(
+            f"--command {text!r} is not hex",
+            detail="Give the leading bytes of the command class, as hex.",
+            commands=["lumascope analyze --frames <file> --command ec40"],
+        ) from None
+    if not prefix:
+        return frames
+    kept = [f for f in frames if f.data[:len(prefix)] == prefix]
+    if not kept:
+        raise LumaScopeError(
+            f"no packets start with {prefix.hex(' ')}",
+            detail="Nothing in this capture matches that command class.",
+            commands=[f"lumascope inspect --frames {getattr(args, 'frames', '<file>')}"
+                      "   # lists the classes that are present"],
+        )
+    return kept
+
+
+def _add_command_flag(p: argparse.ArgumentParser) -> None:
+    # dest must NOT be "command": the subparsers already own that name for the subcommand,
+    # and colliding on it silently blanks the dispatch value for every command with this flag.
+    p.add_argument("--command", dest="command_filter", default=None, metavar="HEX",
+                   help="only packets starting with these bytes, e.g. ec40 "
+                        "(use `inspect` to list the classes present)")
 
 
 def _add_render_flags(p: argparse.ArgumentParser) -> None:
@@ -624,7 +674,7 @@ def _cmd_reassemble(args) -> int:
     from . import view
 
     color = _use_color(args)
-    frames = load_frames(args.frames)
+    frames = _select(load_frames(args.frames), args)
     framing, channels = reassemble_capture(frames)
     if framing is None:
         raise LumaScopeError(
@@ -655,10 +705,10 @@ def _cmd_inspect(args) -> int:
     from .decode import inspect as ins
 
     color = _use_color(args)
-    frames = load_frames(args.frames)
+    frames = _select(load_frames(args.frames), args)
     direction = None if args.direction == "any" else args.direction
     if args.diff:
-        other = load_frames(args.diff)
+        other = _select(load_frames(args.diff), args)
         diffs = ins.diff_captures(
             frames, other, sig_len=args.sig_len, direction=direction,
             vid=args.vid, pid=args.pid,
@@ -689,7 +739,7 @@ def _cmd_cadence(args) -> int:
     from .decode.cadence import analyze_cadence, format_cadence
 
     for path in args.frames:
-        frames = load_frames(path)
+        frames = _select(load_frames(path), args)
         c = analyze_cadence(frames, channel=args.channel, vid=args.vid, pid=args.pid)
         if c is None:
             print(f"# {path}: no outbound streamed frames matched", file=sys.stderr)
@@ -703,7 +753,7 @@ def _cmd_analyze(args) -> int:
     from .capture.serialize import load_frames
 
     color = _use_color(args)
-    frames = load_frames(args.frames)
+    frames = _select(load_frames(args.frames), args)
     report = analyze_frames(
         frames,
         sig_len=args.sig_len,
@@ -783,7 +833,7 @@ def _cmd_show(args) -> int:
         corpus = load_corpus(args.corpus)
         entries = [(lf.step.describe(), lf.frame) for lf in corpus.frames]
     else:
-        frames = load_frames(args.frames)
+        frames = _select(load_frames(args.frames), args)
         entries = [(f"frame {i}", f) for i, f in enumerate(frames)]
 
     if not entries:
@@ -930,6 +980,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("--leds", action="store_true", help="show the reassembled LED buffers instead")
     p_show.add_argument("--no-table", action="store_true", dest="no_table",
                         help="hex only, without the decoded-field table")
+    _add_command_flag(p_show)
     _add_render_flags(p_show)
     p_show.set_defaults(func=_cmd_show)
 
@@ -982,6 +1033,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_re = add("reassemble", description="Rebuild streamed chunks into per-channel LED buffers.")
     p_re.add_argument("--frames", required=True, help="a .frames.jsonl capture")
     p_re.add_argument("--triplets", action="store_true", help="also print the raw RGB triplets")
+    _add_command_flag(p_re)
     _add_render_flags(p_re)
     p_re.set_defaults(func=_cmd_reassemble)
 
@@ -995,12 +1047,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="filter by transfer direction (default: out = host->device)")
     p_ins.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
     p_ins.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
+    _add_command_flag(p_ins)
     _add_render_flags(p_ins)
     p_ins.set_defaults(func=_cmd_inspect)
 
     p_cad = add("cadence", description="Measure an effect's speed from packet timing.")
     p_cad.add_argument("--frames", required=True, nargs="+", help="one or more captures (compared side by side)")
     p_cad.add_argument("--channel", type=int, default=None, help="reference channel to track (default: auto)")
+    _add_command_flag(p_cad)
     p_cad.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
     p_cad.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
     p_cad.set_defaults(func=_cmd_cadence)
@@ -1016,6 +1070,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="cadence reference channel (default: auto)")
     p_an.add_argument("--vid", type=lambda s: int(s, 0), default=None, help="filter to this USB vendor id")
     p_an.add_argument("--pid", type=lambda s: int(s, 0), default=None, help="filter to this USB product id")
+    _add_command_flag(p_an)
     _add_render_flags(p_an)
     p_an.set_defaults(func=_cmd_analyze)
 

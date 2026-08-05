@@ -101,35 +101,65 @@ def _infer_at_prefix(datas: list[bytes], prefix_len: int) -> Optional[ChunkFrami
     cols = {i: [d[i] for d in datas] for i in header}
     card = {i: len(set(v)) for i, v in cols.items()}
 
-    # The defining signal of a chunked stream: the offset column advances by exactly the chunk
-    # size, so its stride equals the count column's value. Try every (count, offset) assignment
-    # and accept the one that satisfies it (this is robust to a last-chunk flag bit in the
-    # channel column, which would otherwise masquerade as a strided offset).
+    # The defining signal of a chunked stream: the offset column advances by exactly the full
+    # chunk size, so its stride equals the count column's full-chunk value. Try every
+    # (count, offset) assignment and accept the one that satisfies it (this is robust to a
+    # last-chunk flag bit in the channel column, which would otherwise masquerade as a
+    # strided offset).
     for count_pos in header:
-        count_mode = Counter(cols[count_pos]).most_common(1)[0][0]
-        if count_mode <= 1:
-            continue
-        for offset_pos in header:
-            if offset_pos == count_pos or card[offset_pos] < 2:
-                continue
-            if _common_stride(cols[offset_pos]) != count_mode:
-                continue
-            channel_pos = next(i for i in header if i not in (count_pos, offset_pos))
-            channel_mask = 0x7F if any(v & 0x80 for v in cols[channel_pos]) else 0xFF
-            final_flag = max((v & ~channel_mask) for v in cols[channel_pos])
-            payload_start = prefix_len + 3
-            return ChunkFraming(
-                prefix=bytes(datas[0][:prefix_len]),
-                channel_pos=channel_pos,
-                channel_mask=channel_mask,
-                final_flag=final_flag,
-                offset_pos=offset_pos,
-                count_pos=count_pos,
-                payload_start=payload_start,
-                unit=_infer_unit(datas, payload_start, count_pos, count_mode),
-                chunk_count=count_mode,
-            )
+        for chunk in _chunk_size_candidates(cols[count_pos]):
+            for offset_pos in header:
+                if offset_pos == count_pos or card[offset_pos] < 2:
+                    continue
+                if _common_stride(cols[offset_pos]) != chunk:
+                    continue
+                channel_pos = next(i for i in header if i not in (count_pos, offset_pos))
+                channel_mask = 0x7F if any(v & 0x80 for v in cols[channel_pos]) else 0xFF
+                final_flag = max((v & ~channel_mask) for v in cols[channel_pos])
+                payload_start = prefix_len + 3
+                return ChunkFraming(
+                    prefix=bytes(datas[0][:prefix_len]),
+                    channel_pos=channel_pos,
+                    channel_mask=channel_mask,
+                    final_flag=final_flag,
+                    offset_pos=offset_pos,
+                    count_pos=count_pos,
+                    payload_start=payload_start,
+                    unit=_infer_unit(datas, payload_start, count_pos, chunk),
+                    chunk_count=chunk,
+                )
     return None
+
+
+def _chunk_size_candidates(counts: list[int]) -> list[int]:
+    """Plausible full-chunk sizes for a count column, best guess first.
+
+    The modal count is the obvious candidate and is right when a capture is dominated by
+    full chunks. It is *wrong* when one host streams several channels of different
+    lengths: each channel ends in a short final chunk, and enough short finals can
+    outnumber any single full size, leaving the mode a partial chunk that no offset
+    stride will ever match. The maximum is the fallback, since the stride between
+    consecutive chunks is by definition the full chunk size.
+
+    Found on live traffic: SignalRGB driving an ASUS Aura controller sends counts of
+    20/8/4 across its channels, where a mode-only test infers no framing at all.
+    """
+    if not counts:
+        return []
+    # Every chunk carries something, so a real count column is positive throughout. A
+    # column that is mostly zero is some other field -- typically a colour byte that is
+    # dark in most frames -- and without this guard a single non-zero outlier in it can
+    # set `max`, match an unrelated strided column, and make a plain single-packet
+    # protocol decode as chunked.
+    if sum(1 for c in counts if c > 0) < len(counts) * 0.8:
+        return []
+
+    tally = Counter(counts)
+    out: list[int] = []
+    for candidate in (tally.most_common(1)[0][0], max(counts)):
+        if candidate > 1 and candidate not in out:
+            out.append(candidate)
+    return out
 
 
 def _infer_unit(datas: list[bytes], payload_start: int, count_pos: int, count_mode: int) -> int:

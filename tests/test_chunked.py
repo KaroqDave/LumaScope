@@ -118,3 +118,36 @@ def test_reassemble_capture_honors_direction():
     assert framing is not None
     assert channels[0] == bytes(range(30))
     assert reassemble_capture(inbound, direction="out") == (None, {})
+
+
+def test_mostly_zero_count_column_is_not_a_chunk_header():
+    """A colour byte that is dark in most frames must not pass for a count column.
+
+    Regression from live-hardware work: allowing the *maximum* count as the chunk size
+    (needed when channels of different lengths end in short chunks) let a single non-zero
+    outlier define it. Paired with an unrelated column whose values happened to be
+    multiples of that outlier, a plain single-packet protocol inferred a chunk framing.
+    """
+    frames = []
+    for i, value in enumerate([0, 51, 102, 153, 204, 255, 0, 0]):
+        # byte 3 is 'count'-shaped only by accident: zero almost everywhere.
+        data = bytes([0xE0, 0x01, value, 51 if i == 1 else 0]) + b"\x00" * 20
+        frames.append(CaptureFrame(data=data, direction="out"))
+    assert infer_framing(frames) is None
+
+
+def test_partial_final_chunk_still_infers_with_only_two_chunks():
+    """The smallest legitimate case: one full chunk and one short final chunk, each seen
+    exactly once. Guarding the above must not cost this."""
+    leds, chunk = 30, 20
+    full = b"\x10\x20\x30" * leds
+    frames = []
+    for off in range(0, leds, chunk):
+        n = min(chunk, leds - off)
+        payload = full[off * 3:(off + n) * 3]
+        head = bytes([0xEC, 0x40, (0x80 if off + n >= leds else 0), off, n])
+        frames.append(CaptureFrame(
+            data=(head + payload).ljust(65, b"\x00")[:65], direction="out"))
+    fr = infer_framing(frames)
+    assert fr is not None and fr.chunk_count == chunk
+    assert reassemble(frames, fr)[0] == full
