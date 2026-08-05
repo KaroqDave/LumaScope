@@ -157,15 +157,31 @@ STEP 4  --  Change one thing, diff it
 STEP 5  --  Produce a spec
 
   A spec needs LABELED captures -- packets paired with the state that caused
-  them. `sweep` does that: it walks a matrix of states, prompts you to set each
-  one in the vendor GUI, and records the traffic per step.
+  them. Captures you take by hand cannot be decoded, however many you collect:
+  the decoder needs to see individual LEDs change, which is what `sweep` sets
+  up. It walks a matrix of states, prompts you to set each one in the vendor
+  GUI, and records the traffic per step.
 
     lumascope sweep --led-count 120 --driver manual \
         --attach LightingService.exe --out aura.corpus.json \
         --decode --emit-cpp AuraController.cpp
 
+  Manual sweeps default to the 'quick' profile: ~46 steps whatever the LED
+  count, versus 535 for a 120-LED board on 'full'. Quick probes fewer LEDs and
+  still recovers layout, stride, channel order, scaling and checksum. Use
+  --profile full when a driver applies the states for you and steps are cheap.
+
+  The corpus is saved after every step, so Ctrl-C (or `q` at the prompt) keeps
+  everything captured so far. Re-running resumes nothing -- but you can decode
+  a partial corpus and see how far it gets.
+
   The decoder validates itself by re-encoding every captured frame byte for
   byte. If validation passes, the spec is right.
+
+    lumascope show --spec aura.spec.json
+
+  ...renders the decoded protocol as a packet with every byte labelled, which
+  is the fastest way to sanity-check what the decoder concluded.
 
 
 STEP 6  --  Verify on the hardware
@@ -209,6 +225,10 @@ def _next(*commands: str) -> None:
     _note("\nNext:")
     for c in commands:
         print(f"  {c}", file=sys.stderr)
+
+
+# Above this many manual steps, ask before committing the operator to the session.
+_CONFIRM_ABOVE_STEPS = 80
 
 
 def _use_color(args) -> bool:
@@ -455,6 +475,14 @@ def _cmd_sweep(args) -> int:
     from . import orchestrate
     from .capture.frida_backend import FridaBackend
     from .capture.serialize import save_corpus
+    from .stimulus import matrix
+
+    manual = args.driver != "openrgb"
+    # A manual step is a human in a GUI (~20s); an API step is milliseconds. Defaulting
+    # manual sweeps to `full` would mean over an hour of clicking on a 120-LED board.
+    profile = args.profile or (matrix.QUICK if manual else matrix.FULL)
+    seconds = 20.0 if manual else 0.6
+    summary = matrix.describe(args.led_count, profile, seconds_per_step=seconds)
 
     if args.driver == "openrgb":
         from .stimulus.openrgb_driver import OpenRGBDriver
@@ -463,18 +491,39 @@ def _cmd_sweep(args) -> int:
         from .stimulus.manual import ManualDriver
         driver = ManualDriver()
 
+    steps = matrix.generate(args.led_count, profile=profile)
+    print(f"# sweep profile '{profile}': {summary}", file=sys.stderr)
+    if manual and len(steps) > _CONFIRM_ABOVE_STEPS and not args.yes:
+        raise LumaScopeError(
+            f"this is a {summary} manual sweep",
+            detail="Every step needs you to set a state in the vendor app by hand.\n"
+                   "The 'quick' profile probes fewer LEDs and still recovers layout,\n"
+                   "stride, channel order, scaling and checksum.",
+            commands=[
+                f"lumascope sweep --profile quick --led-count {args.led_count} "
+                f"--out {args.out} ...",
+                "...or add --yes to run the long one anyway",
+            ],
+        )
+
     backend = FridaBackend(spawn=args.spawn, attach=args.attach, vid=args.vid, pid=args.pid)
+
+    def checkpoint(partial) -> None:
+        save_corpus(partial, args.out)
+
     try:
         corpus, _raw = orchestrate.run_sweep(
-            backend, driver, args.led_count,
+            backend, driver, args.led_count, steps=steps,
             device_name=args.name, vid=args.vid, pid=args.pid,
             chunked=(False if args.no_reassemble else "auto"), channel=args.channel,
             log=lambda m: print(f"# {m}", file=sys.stderr),
+            checkpoint=checkpoint,
         )
-    except ImportError as exc:
+    except ImportError:
         raise MissingDependency(
-            str(exc), "frida",
-            why="A sweep drives the device and records it at the same time.",
+            "frida", "frida",
+            why="A sweep drives the device and records its traffic at the same time,\n"
+                "which needs the in-process hook.",
         ) from None
 
     for level, msg in backend.logs:
@@ -662,6 +711,30 @@ def _cmd_analyze(args) -> int:
     return 0
 
 
+def _show_spec(spec, *, color: bool, width: int, table: bool) -> int:
+    """Render a decoded spec as the packet it produces, with every field named."""
+    from . import codec, view
+    from .annotate import fields_from_spec
+
+    n = spec.leds.count
+    # A recognisable pattern: red, green, blue, then white, so each wire channel is
+    # visibly distinct in the dump and the channel order reads straight off the tags.
+    palette = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255)]
+    colors = [palette[i % len(palette)] for i in range(n)]
+    data = codec.encode_frame(spec, colors, brightness=255)
+    fmap = fields_from_spec(spec, data)
+
+    header = (f"{spec.name}  --  {spec.transport}, {spec.packet_len} bytes, "
+              f"{n} LED(s) {spec.leds.layout} {spec.leds.channel_order}")
+    print(view.render_packet(data, fields=fmap, title=header, color=color,
+                             width=width, table=table))
+    print()
+    print(f"  shown encoding LED 0=red, 1=green, 2=blue, 3=white, repeating")
+    _next("lumascope emit --spec <file> --lang cpp    # the C++ controller skeleton",
+          "lumascope replay --spec <file>             # dry-run the packets it would send")
+    return 0
+
+
 def _cmd_show(args) -> int:
     """Read packets as annotated hex -- the command that replaces squinting at dumps."""
     from .annotate import fields_from_framing, fields_from_spec
@@ -670,19 +743,26 @@ def _cmd_show(args) -> int:
     from . import view
 
     color = _use_color(args)
-    if not args.frames and not args.corpus:
+    if not args.frames and not args.corpus and not args.spec and not args.example:
         raise LumaScopeError(
             "nothing to show",
-            detail="Point `show` at a capture. Every LumaScope sample works out of the box.",
+            detail="Point `show` at a capture, or at a protocol spec to see its layout.",
             commands=["lumascope show --frames samples/aura-red.frames.jsonl",
-                      "lumascope show --frames <your>.frames.jsonl",
+                      "lumascope show --example gamma",
                       "lumascope show --corpus <your>.corpus.json"],
         )
 
     spec = None
-    if args.spec:
+    if args.example:
+        spec = _resolve_example(args.example)
+    elif args.spec:
         from .emit import spec_json as sj
         spec = sj.load_spec(args.spec)
+
+    # A spec on its own is a layout, not a capture: render one representative packet so
+    # you can see what the decoder concluded without hunting through JSON.
+    if spec is not None and not args.frames and not args.corpus:
+        return _show_spec(spec, color=color, width=args.width, table=not args.no_table)
 
     if args.corpus:
         corpus = load_corpus(args.corpus)
@@ -825,7 +905,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_show = add("show", description="Read captured packets as annotated, colour-coded hex.")
     p_show.add_argument("--frames", default=None, help="a .frames.jsonl capture")
     p_show.add_argument("--corpus", default=None, help="a .corpus.json capture (shows step labels)")
-    p_show.add_argument("--spec", default=None, help="annotate using this decoded spec")
+    p_show.add_argument("--spec", default=None,
+                        help="a decoded spec: shows its packet layout, or annotates a capture")
+    p_show.add_argument("--example", default=None,
+                        help="show a built-in example protocol's layout")
     p_show.add_argument("--index", type=int, default=None, metavar="N", help="show only packet N")
     p_show.add_argument("--limit", type=int, default=3, metavar="N", help="how many packets (default: 3)")
     p_show.add_argument("--all", action="store_true", help="show every packet")
@@ -858,6 +941,11 @@ def build_parser() -> argparse.ArgumentParser:
                          help="how many LEDs the device exposes")
     p_sweep.add_argument("--driver", choices=("manual", "openrgb"), default="manual",
                          help="how to drive device state (default: manual/operator-guided)")
+    p_sweep.add_argument("--profile", choices=("quick", "full"), default=None,
+                         help="how much of the matrix to run (default: quick for manual, "
+                              "full for openrgb)")
+    p_sweep.add_argument("--yes", action="store_true",
+                         help="skip the confirmation for a long manual sweep")
     src = p_sweep.add_mutually_exclusive_group(required=True)
     src.add_argument("--spawn", nargs="+", metavar="PROG", help="launch a program under capture")
     src.add_argument("--attach", metavar="PID|NAME", help="attach to a running process/service")

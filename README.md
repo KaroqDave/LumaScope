@@ -65,6 +65,18 @@ lumascope analyze --frames samples/aura-red.frames.jsonl
 [`samples/README.md`](samples/README.md) walks through more, including a real single-variable
 diff that proves a negative: the ASUS rainbow effect has **no speed field** on the wire.
 
+The same rendering works on a protocol rather than a capture, which is the quickest way to
+check what a decode concluded — here the `G R B` tag row shows the recovered wire order:
+
+```bash
+lumascope show --example interleaved
+```
+
+```
+     0  cc 24 00 ff  00 ff 00 00  00 00 ff ff  ff ff 00 ff  |.$..............|
+        id == G  R   B  G  R  B   G  R  B  G   R  B  G  R
+```
+
 ## Install
 
 The **decode + emit core is pure Python stdlib**. Capture and stimulus backends are optional
@@ -98,7 +110,7 @@ Run `lumascope <command> --help` for options, or `lumascope guide` for the whole
 | `guide` | the end-to-end reverse-engineering workflow | no |
 | `demo <example>` | full synth -> decode -> validate -> C++ pipeline on one example | no |
 | `selftest` | prove the decoder recovers the built-in example specs | no |
-| `show` | read packets as annotated, colour-coded hex (`--leds` for the buffer) | no |
+| `show` | read packets as annotated hex (`--leds` for the buffer, `--spec` for a layout) | no |
 | `analyze` | one-shot report: command classes, chunk framing, effect timing | no |
 | `inspect` | group by command class, or diff two single-variable captures | no |
 | `reassemble` | rebuild a chunked/streamed capture into per-channel buffers | no |
@@ -148,10 +160,35 @@ lumascope inspect --frames red.frames.jsonl --diff green.frames.jsonl
 lumascope sweep --led-count 120 --driver manual --attach LightingService.exe \
     --out aura.corpus.json --decode --emit-cpp AuraController.cpp
 
-# 6. (optional) verify the decoded spec by replaying it - vendor app CLOSED first
+# 6. check what the decoder concluded, as a labelled packet
+lumascope show --spec aura.spec.json
+
+# 7. (optional) verify the decoded spec by replaying it - vendor app CLOSED first
 lumascope replay --spec aura.spec.json --device-path "<path>"          # dry-run
 lumascope replay --spec aura.spec.json --device-path "<path>" --write --yes
 ```
+
+Captures you take by hand can be read, diffed and reassembled, but they cannot be *decoded*
+into a spec — decoding needs to watch individual LEDs change, which is what step 5 sets up.
+
+### Sweep profiles
+
+A sweep step under `--driver manual` is a human setting a state in a vendor GUI, so the
+matrix size decides whether the session takes minutes or an evening:
+
+| Profile | 8 LEDs | 30 LEDs | 120 LEDs |
+|---|---|---|---|
+| `quick` (default for `--driver manual`) | 46 steps | 46 steps | 46 steps |
+| `full` (default for `--driver openrgb`) | 87 steps | 175 steps | 535 steps |
+
+`quick` probes a contiguous run of the first few LEDs instead of every one, and still
+recovers layout, stride, channel order, scaling and checksum — pinned by
+`tests/test_matrix_profiles.py` for both interleaved and planar devices at 30 and 120 LEDs.
+`full` probes every LED and is the right choice when a driver applies the states for you.
+LumaScope asks for confirmation before starting a manual sweep longer than 80 steps.
+
+**The corpus is written after every step.** Ctrl-C, or `q` at the prompt, keeps everything
+captured up to that point rather than discarding the session.
 
 ## Proven on real hardware
 

@@ -23,8 +23,12 @@ from ..model import SweepStep
 class StimulusDriver(ABC):
     name = "base"
 
-    def setup(self, led_count: int) -> None:
-        """Optional one-time preparation (connect, select device, enter a static mode)."""
+    def setup(self, led_count: int, total_steps: int = 0) -> None:
+        """Optional one-time preparation (connect, select device, enter a static mode).
+
+        ``total_steps`` lets an operator-facing driver show progress; drivers that do not
+        need it ignore it.
+        """
 
     @abstractmethod
     def set_state(self, step: SweepStep) -> bool:

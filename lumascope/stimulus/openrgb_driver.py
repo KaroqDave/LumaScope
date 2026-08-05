@@ -28,7 +28,7 @@ class OpenRGBDriver(StimulusDriver):
         self._client = None
         self._device = None
 
-    def setup(self, led_count: int) -> None:
+    def setup(self, led_count: int, total_steps: int = 0) -> None:
         from openrgb import OpenRGBClient  # lazy optional dependency
 
         self._client = OpenRGBClient(self.host, self.port, name="LumaScope")

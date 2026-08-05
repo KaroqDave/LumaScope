@@ -14,6 +14,7 @@ assembles a :class:`Corpus` that ``lumascope decode`` consumes unchanged.
 
 from __future__ import annotations
 
+import inspect
 from collections import Counter
 from typing import Callable, Optional
 
@@ -21,6 +22,7 @@ from .decode.chunked import ChunkFraming, dominant_command_class, infer_framing,
 from .model import CaptureFrame, Corpus, LabeledFrame, SweepStep
 from .stimulus import matrix
 from .stimulus.base import StimulusDriver
+from .stimulus.manual import SweepAborted
 from .stimulus.sync import collect_until_quiet
 
 
@@ -173,6 +175,23 @@ def _chunk_transport(raw: list[tuple[SweepStep, list[CaptureFrame]]]) -> str:
     return transfers.most_common(1)[0][0] if transfers else "output"
 
 
+def _setup_driver(driver: StimulusDriver, led_count: int, total_steps: int) -> None:
+    """Call ``driver.setup``, passing the step total only if the driver accepts it.
+
+    ``total_steps`` was added so operator-facing drivers can show progress. Probing the
+    signature keeps drivers written against the older one working, rather than failing
+    with a confusing TypeError raised from inside the orchestrator.
+    """
+    try:
+        accepts = "total_steps" in inspect.signature(driver.setup).parameters
+    except (TypeError, ValueError):  # C-implemented or otherwise un-introspectable
+        accepts = False
+    if accepts:
+        driver.setup(led_count, total_steps=total_steps)
+    else:
+        driver.setup(led_count)
+
+
 def run_sweep(
     backend,
     driver: StimulusDriver,
@@ -189,23 +208,37 @@ def run_sweep(
     chunked: object = "auto",
     channel: Optional[int] = None,
     log: Optional[Callable[[str], None]] = None,
+    profile: str = matrix.FULL,
+    checkpoint: Optional[Callable[[Corpus], None]] = None,
 ) -> tuple[Corpus, list[tuple[SweepStep, list[CaptureFrame]]]]:
-    """Run the full sweep and return ``(corpus, raw_per_step_frames)``.
+    """Run the sweep and return ``(corpus, raw_per_step_frames)``.
 
     ``raw`` is kept so a caller can inspect/persist everything captured, not just the one
     representative frame per step that ends up in the corpus. ``chunked``/``channel`` control
     chunked-protocol reassembly (see :func:`pair`).
+
+    A manual sweep is a long, uninterruptible-feeling session, so partial work is never
+    thrown away: ``checkpoint`` is called with the corpus-so-far after every step, and
+    stopping early -- Ctrl-C, or ``q`` at the prompt -- still returns everything captured
+    up to that point rather than raising past the caller's save.
     """
-    steps = steps if steps is not None else matrix.generate(led_count)
+    steps = steps if steps is not None else matrix.generate(led_count, profile=profile)
     raw: list[tuple[SweepStep, list[CaptureFrame]]] = []
+
+    def build() -> Corpus:
+        return pair(raw, led_count, device_name=device_name, vid=vid, pid=pid,
+                    chunked=chunked, channel=channel)
 
     driver_started = False
     backend_started = False
     try:
-        driver.setup(led_count)
-        driver_started = True
+        # Open the capture backend *before* engaging the driver. Under the manual driver
+        # setup prints "start setting states" to a human, and it is worth failing loudly
+        # first rather than walking someone into a session that cannot record anything.
         backend.open()
         backend_started = True
+        _setup_driver(driver, led_count, len(steps))
+        driver_started = True
         for step in steps:
             backend.drain()  # drop frames buffered before this step's state was applied
             applied = driver.set_state(step)
@@ -217,12 +250,15 @@ def run_sweep(
             raw.append((step, frames))
             if log:
                 log(f"step {step.step_id} ({step.describe()}): {len(frames)} frame(s)")
+            if checkpoint is not None:
+                checkpoint(build())
+    except (KeyboardInterrupt, SweepAborted):
+        if log:
+            log(f"stopped early -- keeping the {len(raw)} step(s) already captured")
     finally:
         if backend_started:
             backend.close()
         if driver_started:
             driver.teardown()
 
-    corpus = pair(raw, led_count, device_name=device_name, vid=vid, pid=pid,
-                  chunked=chunked, channel=channel)
-    return corpus, raw
+    return build(), raw

@@ -165,26 +165,35 @@ def test_skipped_step_contributes_no_frame():
     assert corpus.frames == []
 
 
-def test_driver_teardown_runs_when_backend_open_fails():
+class TrackingDriver(StimulusDriver):
+    """Records the lifecycle calls it receives. Uses the pre-``total_steps`` signature on
+    purpose, to prove drivers written against the older contract still run."""
+
+    name = "tracking"
+
+    def __init__(self, fail_on_step=False):
+        self.setup_called = False
+        self.teardown_called = False
+        self.fail_on_step = fail_on_step
+
+    def setup(self, led_count: int) -> None:
+        self.setup_called = True
+
+    def set_state(self, step):
+        if self.fail_on_step:
+            raise RuntimeError("boom")
+        return True
+
+    def teardown(self) -> None:
+        self.teardown_called = True
+
+
+def test_backend_opens_before_the_driver_is_engaged():
+    """A failure to start capturing must not first walk an operator into a manual session."""
+
     class FailingBackend(MockBackend):
         def open(self) -> None:
             raise RuntimeError("boom")
-
-    class TrackingDriver(StimulusDriver):
-        name = "tracking"
-
-        def __init__(self):
-            self.setup_called = False
-            self.teardown_called = False
-
-        def setup(self, led_count: int) -> None:
-            self.setup_called = True
-
-        def set_state(self, step):
-            return True
-
-        def teardown(self) -> None:
-            self.teardown_called = True
 
     driver = TrackingDriver()
     try:
@@ -193,5 +202,17 @@ def test_driver_teardown_runs_when_backend_open_fails():
         assert str(exc) == "boom"
     else:
         raise AssertionError("backend open failure should propagate")
+    assert not driver.setup_called
+    assert not driver.teardown_called
+
+
+def test_driver_teardown_runs_when_a_step_fails():
+    driver = TrackingDriver(fail_on_step=True)
+    try:
+        orchestrate.run_sweep(MockBackend(), driver, led_count=2, **FAST)
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+    else:
+        raise AssertionError("step failure should propagate")
     assert driver.setup_called
     assert driver.teardown_called
